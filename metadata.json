@@ -1,0 +1,7 @@
+{
+  "name": "Partner App - Gambia Edition",
+  "description": "A high-fidelity Partner application for Drivers and Merchants in The Gambia, featuring a dual-role system, detailed wallet management, and an iOS-inspired design.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
