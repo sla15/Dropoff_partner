@@ -3,7 +3,13 @@ import { useApp } from '../context/AppContext';
 import { TrendingUp, ShoppingBag, Star, Calendar, ArrowUpRight } from 'lucide-react';
 
 export const MerchantWalletView: React.FC = () => {
-    const { profile, transactions, reviews, orderStats } = useApp();
+    const { profile, transactions, reviews, orderStats, merchantOrders } = useApp();
+
+    // Calculate Total Revenue from Completed Orders
+    // Calculate Total Revenue from Completed or Delivered Orders
+    const totalRevenue = merchantOrders
+        .filter(o => o.status === 'completed' || o.status === 'delivered')
+        .reduce((sum, o) => sum + (Number(o.total) || 0), 0);
 
     return (
         <div className="animate-in fade-in duration-500">
@@ -11,7 +17,7 @@ export const MerchantWalletView: React.FC = () => {
             <div className="mx-6 mt-6 bg-[#00E39A] rounded-[32px] p-8 shadow-xl relative overflow-hidden">
                 <div className="relative z-10 text-center">
                     <p className="text-slate-900/60 text-[10px] font-black tracking-[0.2em] uppercase mb-2">Total Revenue</p>
-                    <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">D{profile.walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
+                    <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">D{totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
 
                     <div className="inline-flex items-center gap-2 bg-black/10 px-4 py-2 rounded-full border border-black/10">
                         <ShoppingBag size={14} className="text-slate-900" />

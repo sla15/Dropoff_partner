@@ -22,4 +22,5 @@ export const INITIAL_PROFILE: UserProfile = {
     idCard: { url: '', status: 'MISSING' },
     insurance: { url: '', status: 'MISSING' },
   },
+  isSuspended: false,
 };

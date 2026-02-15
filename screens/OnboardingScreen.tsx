@@ -11,7 +11,7 @@ import { supabase } from '../lib/supabase';
 export type OnboardingStep = 'WELCOME' | 'PHONE_INPUT' | 'VERIFY' | 'INFO' | 'ROLE' | 'DRIVER_FORM' | 'DRIVER_DOCS' | 'MERCHANT_FORM' | 'MERCHANT_DOCS';
 
 export const OnboardingScreen: React.FC = () => {
-  const { updateProfile, completeOnboarding, setRole, secondaryOnboardingRole, cancelSecondaryOnboarding, profile, setCurrentTab, loadUserData } = useApp();
+  const { updateProfile, completeOnboarding, setRole, secondaryOnboardingRole, cancelSecondaryOnboarding, profile, setCurrentTab, loadUserData, showAlert } = useApp();
   const [stepIndex, setStepIndex] = useState(0);
 
   const [name, setName] = useState('');
@@ -31,7 +31,7 @@ export const OnboardingScreen: React.FC = () => {
 
     // We dynamically add INFO if needed (handled in logic), but for steps array consistency:
     // This array is mainly for progress bar. We might jump over INFO.
-    const remaining = ['INFO', 'ROLE'];
+    const remaining: OnboardingStep[] = ['INFO', 'ROLE'];
 
     if (selectedRole === 'DRIVER') return [...base, ...remaining, 'DRIVER_FORM', 'DRIVER_DOCS'];
     if (selectedRole === 'MERCHANT') return [...base, ...remaining, 'MERCHANT_FORM', 'MERCHANT_DOCS'];
@@ -77,7 +77,7 @@ export const OnboardingScreen: React.FC = () => {
     await completeOnboarding();
     // Use the role to determine where to go next
     if (selectedRole === 'MERCHANT' || secondaryOnboardingRole === 'MERCHANT') {
-      setCurrentTab('merchant');
+      setCurrentTab('orders');
     } else {
       setCurrentTab('home');
     }
@@ -95,7 +95,7 @@ export const OnboardingScreen: React.FC = () => {
       if (error) throw error;
       setStepIndex(steps.indexOf('VERIFY'));
     } catch (err: any) {
-      alert(`Error sending code: ${err.message}`);
+      showAlert('Error', `We couldn't send the code: ${err.message}`);
     } finally {
       setIsVerifying(false);
     }
@@ -162,7 +162,7 @@ export const OnboardingScreen: React.FC = () => {
       setIsVerifying(false);
     } catch (err: any) {
       console.error("OTP Verification failed", err);
-      alert(`Invalid code: ${err.message}`);
+      showAlert('Invalid Code', 'The code you entered is not correct. Please try again.');
       setIsVerifying(false);
     }
   };
@@ -196,18 +196,27 @@ export const OnboardingScreen: React.FC = () => {
       <div className="flex-1 flex flex-col justify-end pb-24">
         <div className="flex flex-col items-start relative">
           <div className="relative mb-12">
-            <div className="w-24 h-24 bg-black dark:bg-white rounded-[2.5rem] flex items-center justify-center relative z-10 animate-subtle-float shadow-2xl">
-              <div className="w-12 h-12 rounded-full border-[5px] border-[#00E39A] relative flex items-center justify-center">
-                <div className="w-6 h-6 rounded-full border-2 border-[#00E39A]/30"></div>
-              </div>
+            {/* Significantly larger logo, no background container */}
+            <div className="w-48 h-48 md:w-64 md:h-64 animate-subtle-float">
+              <img
+                src="/assets/logo.png"
+                alt="DROPOFF Logo"
+                className="w-full h-full object-contain"
+              />
             </div>
           </div>
-          <h1 className="text-[56px] font-black text-slate-900 dark:text-white leading-[0.95] tracking-tighter mb-4">Partner<br />App.</h1>
+          <h1 className="text-[52px] font-black text-slate-900 dark:text-white leading-[0.9] tracking-tighter mb-4">
+            DROP<span className="text-[#00E39A]">OFF</span><br />
+            <span className="text-[42px]">Driver & Business</span>
+          </h1>
           <p className="text-slate-500 text-xl max-w-[280px] leading-relaxed font-medium">Partner with the network. Drive or Sell in The Gambia.</p>
         </div>
       </div>
       <div className="space-y-6 shrink-0">
         <button onClick={() => setStepIndex(steps.indexOf('PHONE_INPUT'))} className="w-full bg-[#00E39A] text-slate-900 font-black text-[20px] py-5 rounded-[24px] shadow-lg active:scale-[0.97] transition-all">Get Started</button>
+        <p className="text-center text-[11px] text-slate-400 font-medium px-4 leading-relaxed">
+          By continuing you have agreed to our <span className="underline">Terms of Services</span> and <span className="underline">Privacy Policy</span>.
+        </p>
       </div>
     </div>
   );
@@ -225,7 +234,7 @@ export const OnboardingScreen: React.FC = () => {
             prefix="+220"
             value={phone}
             onChange={e => setPhone(e.target.value)}
-            placeholder="*******"
+            placeholder="******"
             type="tel"
             maxLength={7}
             autoFocus
@@ -344,7 +353,7 @@ export const OnboardingScreen: React.FC = () => {
               {/* Only show back button if not in VERIFY step or if no OTP has been entered yet. 
                  Also, in PHONE_INPUT we can go back to WELCOME. 
               */}
-              {(currentStep !== 'VERIFY' || otp.every(d => !d)) ? (
+              {(currentStep !== 'VERIFY' && currentStep !== 'PHONE_INPUT' || (currentStep === 'VERIFY' && otp.every(d => !d))) ? (
                 <button onClick={handleBack} className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-900 transition-colors">
                   <ChevronLeft size={24} className="text-slate-900 dark:text-white" />
                 </button>

@@ -53,8 +53,14 @@ export const Layout: React.FC = () => {
       {/* Overlays */}
       {activeChat && <ChatScreen />}
 
-      {/* Navigation (Hide when chat is open for cleaner look) */}
-      {!activeChat && <FloatingNav currentTab={currentTab} onTabChange={setCurrentTab} />}
+      {/* Navigation (Hide when chat is open or ride is active for cleaner look) */}
+      {!activeChat && (
+        <FloatingNav
+          currentTab={currentTab}
+          onTabChange={setCurrentTab}
+          isVisible={!useApp().rideStatus || useApp().rideStatus === 'IDLE'}
+        />
+      )}
     </div>
   );
 };

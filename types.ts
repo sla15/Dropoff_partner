@@ -1,7 +1,7 @@
 
 export type Role = 'DRIVER' | 'MERCHANT' | 'CUSTOMER';
 
-export type OrderStatus = 'INCOMING' | 'PENDING' | 'PREPARING' | 'READY';
+export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'delivering' | 'completed' | 'cancelled';
 export type RideStatus = 'IDLE' | 'RINGING' | 'ACCEPTED' | 'ARRIVED' | 'NAVIGATING' | 'COMPLETED';
 
 export interface Product {
@@ -27,13 +27,19 @@ export interface Order {
 
 export interface RideRequest {
   id: string;
+  customer_id?: string;
   passengerName: string;
-  rating: number;
+  passengerPhone?: string;
+  passengerImage?: string;
+  passengerRating?: number;
+  rating: number; // For compatibility with existing code
   rideCount: number;
   pickupDistance: string;
   destination: string;
   price: number;
   pickupLocation: string;
+  pickup_lat?: number;
+  pickup_lng?: number;
   stops?: string[];
   type?: 'PASSENGER' | 'DELIVERY';
 }
@@ -56,6 +62,7 @@ export interface Review {
 }
 
 export interface BusinessDetails {
+  id: string;
   businessName: string;
   logo: string;
   category: string;

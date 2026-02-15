@@ -18,11 +18,15 @@ const AppContent: React.FC = () => {
   return showOnboarding ? <OnboardingScreen /> : <Layout />;
 }
 
+import { ErrorBoundary } from './components/ErrorBoundary';
+
 const App: React.FC = () => {
   return (
-    <AppProvider>
-      <AppContent />
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </ErrorBoundary>
   );
 };
 

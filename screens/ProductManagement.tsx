@@ -6,7 +6,7 @@ import { Edit2, Plus, X, Image as ImageIcon, ChevronDown, Upload, Trash2 } from 
 import { supabase } from '../lib/supabase';
 
 export const ProductManagement: React.FC = () => {
-    const { products, addProduct, updateProduct, deleteProduct, loadProducts, profile, user, uploadFile } = useApp();
+    const { products, addProduct, updateProduct, deleteProduct, loadProducts, profile, user, uploadFile, showAlert } = useApp();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [businessId, setBusinessId] = useState<string | null>(null);
@@ -41,11 +41,8 @@ export const ProductManagement: React.FC = () => {
     // Derived state for categories
     const categories = Array.from(new Set(products.map(p => p.category)));
 
-    // Available Product Groups from Business Profile + Existing Products
-    const availableGroups = Array.from(new Set([
-        ...(profile.business?.subCategories || []),
-        ...categories
-    ]));
+    // Available Product Groups from Business Profile ONLY (per user request)
+    const availableGroups = profile.business?.subCategories || [];
 
     const toggleAvailability = async (id: string, currentStatus: boolean) => {
         await updateProduct(id, { isAvailable: !currentStatus });
@@ -80,13 +77,13 @@ export const ProductManagement: React.FC = () => {
 
     const handleSaveProduct = async () => {
         if (!businessId) {
-            alert('Business not found. Please refresh or complete onboarding.');
+            showAlert('Wait!', 'We can\'t find your business. Please refresh or finish your setup.');
             return;
         }
 
         if (editingProduct) {
             if (!editingProduct.name || !editingProduct.price || !editingProduct.category) {
-                alert('Please fill in Name, Price and Product Group');
+                showAlert('Missing Info', 'Please fill in Name, Price and Product Group');
                 return;
             }
             const success = await updateProduct(editingProduct.id, {
@@ -104,9 +101,16 @@ export const ProductManagement: React.FC = () => {
             }
         } else {
             if (!newProduct.name || !newProduct.price || !newProduct.category) {
-                alert('Please fill in Name, Price and Product Group');
+                showAlert('Missing Info', 'Please fill in Name, Price and Product Group');
                 return;
             }
+
+            // Task 6: Limit to 10 products
+            if (products.length >= 10) {
+                showAlert('Limit Reached', 'You can only have 10 products. Please delete an old product to add a new one.');
+                return;
+            }
+
             const success = await addProduct({
                 name: newProduct.name,
                 price: parseFloat(newProduct.price),
@@ -121,15 +125,15 @@ export const ProductManagement: React.FC = () => {
                 setIsModalOpen(false);
                 setNewProduct({ name: '', price: '', category: '', image: '', stock: 10, isAvailable: true, description: '' });
             } else {
-                alert('Failed to add product. Please check your connection and try again.');
+                showAlert('Oops!', 'We couldn\'t add the product. Please check your internet and try again.');
             }
         }
     };
 
     const handleDeleteProduct = async (id: string) => {
-        if (window.confirm('Delete this product?')) {
-            await deleteProduct(id);
-        }
+        showAlert('Delete Product?', 'Are you sure you want to delete this from your store?', () => {
+            deleteProduct(id);
+        });
     };
 
     const openEditModal = (product: Product) => {

@@ -116,7 +116,7 @@ export const BusinessDetailsContent: React.FC<{ onClose: () => void, onActiveDra
       <div className="space-y-2">
         <label className="text-[10px] font-black text-slate-400 uppercase ml-2 block tracking-wider">Sub-Categories</label>
         <div className="flex gap-2">
-          <input value={newSubCat} onChange={e => setNewSubCat(e.target.value)} className="flex-1 bg-slate-50 dark:bg-zinc-850 p-4 rounded-xl border-none outline-none dark:text-white" placeholder="Add tag..." />
+          <input value={newSubCat} onChange={e => setNewSubCat(e.target.value)} className="flex-1 bg-gray-100 dark:bg-[#1C1C1E] p-4 rounded-2xl font-medium text-lg text-gray-900 dark:text-white border border-transparent focus:ring-2 focus:ring-[#00E39A] outline-none transition-all placeholder-gray-400" placeholder="Add tag..." />
           <button onClick={addSubCategory} className="w-14 h-14 bg-black dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center"><Plus /></button>
         </div>
         <div className="flex flex-wrap gap-2 pt-2">

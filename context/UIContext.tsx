@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppNotification, ChatSession, ChatMessage } from '../types';
+import { AlertModal } from '../components/AlertModal';
 
 interface UIContextType {
     isDarkMode: boolean;
@@ -14,24 +15,43 @@ interface UIContextType {
     closeChat: () => void;
     chatMessages: Record<string, ChatMessage[]>;
     sendMessage: (sessionId: string, text: string) => void;
+    showAlert: (title: string, message: string, onConfirm?: () => void) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [isDarkMode, setIsDarkMode] = useState(false);
+    const [isDarkMode, setIsDarkMode] = useState(() =>
+        window.matchMedia('(prefers-color-scheme: dark)').matches
+    );
     const [currentTab, setCurrentTab] = useState('home');
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
+    const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm?: () => void }>({
+        isOpen: false,
+        title: '',
+        message: ''
+    });
 
     useEffect(() => {
+        // Sync dark mode class with state
         if (isDarkMode) {
             document.documentElement.classList.add('dark');
         } else {
             document.documentElement.classList.remove('dark');
         }
     }, [isDarkMode]);
+
+    useEffect(() => {
+        // Listen for system theme changes
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handler = (e: MediaQueryListEvent) => setIsDarkMode(e.matches);
+
+        // Use addEventListener for modern browsers/Capacitor
+        mediaQuery.addEventListener('change', handler);
+        return () => mediaQuery.removeEventListener('change', handler);
+    }, []);
 
     const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
@@ -50,13 +70,25 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setChatMessages(prev => ({ ...prev, [sessionId]: [...(prev[sessionId] || []), newMessage] }));
     };
 
+    const showAlert = (title: string, message: string, onConfirm?: () => void) => {
+        setAlertModal({ isOpen: true, title, message, onConfirm });
+    };
+
     return (
         <UIContext.Provider value={{
             isDarkMode, toggleTheme, currentTab, setCurrentTab, notifications,
             pushNotification, removeNotification, activeChat, openChat, closeChat,
-            chatMessages, sendMessage
+            chatMessages, sendMessage, showAlert
         }}>
             {children}
+            <AlertModal
+                isOpen={alertModal.isOpen}
+                title={alertModal.title}
+                message={alertModal.message}
+                onConfirm={alertModal.onConfirm}
+                onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
+                isDarkMode={isDarkMode}
+            />
         </UIContext.Provider>
     );
 };

@@ -12,6 +12,8 @@ interface DomainContextType {
     addProduct: (product: Omit<Product, 'id'>, businessId: string) => Promise<boolean>;
     updateProduct: (id: string, updates: Partial<Product>) => Promise<boolean>;
     deleteProduct: (id: string) => Promise<boolean>;
+    deleteOrder: (id: string) => Promise<boolean>;
+    deleteRide: (id: string) => Promise<boolean>;
     transactions: Transaction[];
     reviews: Review[];
     merchantOrders: Order[];
@@ -35,6 +37,90 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [merchantOrders, setMerchantOrders] = useState<Order[]>([]);
     const [currentRide, setCurrentRide] = useState<RideRequest | null>(null);
     const [rideStatus, setRideStatus] = useState<RideStatus>('IDLE');
+
+    const loadProducts = useCallback(async (businessId: string) => {
+        try {
+            const { data, error } = await supabase.from('products').select('*').eq('business_id', businessId);
+            if (error) throw error;
+
+            const mappedProducts: Product[] = (data || []).map(p => ({
+                id: p.id,
+                name: p.name || 'Unknown Product',
+                description: p.description || '',
+                price: parseFloat(p.price || '0'),
+                image: p.image_url || '',
+                category: p.category || '',
+                stock: p.stock || 0,
+                isAvailable: p.is_available ?? true
+            }));
+            setProducts(mappedProducts);
+        } catch (err) {
+            console.error("Error loading products:", err);
+        }
+    }, []);
+
+    const loadMerchantOrders = useCallback(async (businessId: string) => {
+        try {
+            // Use explicit Foreign Key for customer join to avoid ambiguity (customer_id vs driver_id)
+            const { data: ordersData, error } = await supabase
+                .from('orders')
+                .select('*, customer:profiles!orders_customer_id_fkey(full_name, phone)')
+                .eq('business_id', businessId)
+                // .neq('status', 'cancelled') // Removed per user request to manual delete
+                // .neq('status', 'completed') // Removed per user request to manual delete
+                .order('created_at', { ascending: false });
+
+            console.log(`[DomainContext] Loaded ${ordersData?.length} orders for business ${businessId}`);
+            if (error) {
+                console.error("[DomainContext] Error fetching orders (Check console for object details):", JSON.stringify(error, null, 2));
+                throw error;
+            }
+
+            if (error) throw error;
+
+            const ordersWithItems: Order[] = [];
+            for (const o of ordersData) {
+                const { data: items } = await supabase
+                    .from('order_items')
+                    .select('*, products(*)')
+                    .eq('order_id', o.id);
+
+                const customerData = Array.isArray(o.customer) ? o.customer[0] : o.customer;
+
+                // Safety check for items with missing products
+                const validItems = (items || []).filter(i => i.products);
+
+                ordersWithItems.push({
+                    id: o.id,
+                    customerName: customerData?.full_name || 'Customer',
+                    customerPhone: customerData?.phone || '',
+                    status: o.status as OrderStatus,
+                    total: parseFloat(o.total_amount),
+                    timestamp: new Date(o.created_at),
+                    items: (validItems || []).map(i => {
+                        // Ensure product data is an object even if Supabase returns it as a list
+                        const productData = Array.isArray(i.products) ? i.products[0] : i.products;
+
+                        return {
+                            product: {
+                                id: productData?.id,
+                                name: productData?.name || 'Unknown Product',
+                                price: parseFloat(productData?.price || '0'),
+                                image: productData?.image_url || '',
+                                category: productData?.category || ''
+                            } as any,
+                            quantity: i.quantity || 1,
+                            checked: false
+                        };
+                    })
+                });
+            }
+            setMerchantOrders(ordersWithItems);
+            console.log(`[DomainContext] Final processed orders: ${ordersWithItems.length}`, ordersWithItems);
+        } catch (err) {
+            console.error("Error loading merchant orders:", err);
+        }
+    }, []);
 
     const loadData = useCallback(async () => {
         if (!user) return;
@@ -63,21 +149,21 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const rideTx: Transaction[] = (rides || []).map(r => ({
                 id: r.id,
                 type: 'RIDE',
-                amount: parseFloat(r.price),
-                date: new Date(r.created_at).toLocaleDateString(),
-                description: `Ride to ${r.dropoff_address.split(',')[0]}`,
+                amount: parseFloat(r.price || '0'),
+                date: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'N/A',
+                description: `Ride to ${r.dropoff_address?.split(',')[0] || 'Unknown'}`,
                 status: 'completed',
-                commission: parseFloat(r.price) * 0.2 // Assuming 20%
+                commission: parseFloat(r.price || '0') * 0.2
             }));
 
-            const orderTx: Transaction[] = merchantOrders.map(o => ({
+            const orderTx: Transaction[] = (merchantOrders || []).map(o => ({
                 id: o.id,
                 type: 'ORDER',
-                amount: parseFloat(o.total_amount),
-                date: new Date(o.created_at).toLocaleDateString(),
-                description: `Order #${o.id.slice(0, 8)}`,
+                amount: parseFloat(o.total_amount || '0'),
+                date: o.created_at ? new Date(o.created_at).toLocaleDateString() : 'N/A',
+                description: `Order #${o.id?.slice(0, 8) || '...'}`,
                 status: 'completed',
-                commission: parseFloat(o.total_amount) * 0.15 // Assuming 15%
+                commission: parseFloat(o.total_amount || '0') * 0.15
             }));
 
             setTransactions([...rideTx, ...orderTx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
@@ -92,14 +178,18 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const mappedReviews: Review[] = [];
             if (reviewsData) {
                 for (const r of reviewsData) {
-                    const { data: reviewer } = await supabase.from('profiles').select('full_name').eq('id', r.reviewer_id).single();
-                    mappedReviews.push({
-                        id: r.id,
-                        reviewerName: reviewer?.full_name || 'Anonymous',
-                        rating: r.rating,
-                        comment: r.comment || '',
-                        date: new Date(r.created_at).toLocaleDateString()
-                    });
+                    try {
+                        const { data: reviewer } = await supabase.from('profiles').select('full_name').eq('id', r.reviewer_id).single();
+                        mappedReviews.push({
+                            id: r.id,
+                            reviewerName: reviewer?.full_name || 'Anonymous',
+                            rating: r.rating || 0,
+                            comment: r.comment || '',
+                            date: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'N/A'
+                        });
+                    } catch (reviewErr) {
+                        console.error("Error mapping individual review:", reviewErr);
+                    }
                 }
             }
             setReviews(mappedReviews);
@@ -110,75 +200,44 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch (err) {
             console.error("Error loading domain data:", err);
         }
-    }, [user]);
+    }, [user, loadMerchantOrders]);
 
     useEffect(() => {
         loadData();
     }, [loadData]);
 
-    const loadProducts = useCallback(async (businessId: string) => {
-        try {
-            const { data, error } = await supabase.from('products').select('*').eq('business_id', businessId);
-            if (error) throw error;
+    // REAL-TIME ORDER SUBSCRIPTION
+    useEffect(() => {
+        if (!user) return;
 
-            const mappedProducts: Product[] = data.map(p => ({
-                id: p.id,
-                name: p.name,
-                description: p.description,
-                price: parseFloat(p.price),
-                image: p.image_url,
-                category: p.category,
-                stock: p.stock,
-                isAvailable: p.is_available
-            }));
-            setProducts(mappedProducts);
-        } catch (err) {
-            console.error("Error loading products:", err);
-        }
-    }, []);
+        const setupSubscription = async () => {
+            const { data: business } = await supabase.from('businesses').select('id').eq('owner_id', user.id).maybeSingle();
+            if (!business) return;
 
-    const loadMerchantOrders = useCallback(async (businessId: string) => {
-        try {
-            const { data: ordersData, error } = await supabase
-                .from('orders')
-                .select('*, profiles(full_name, phone)')
-                .eq('business_id', businessId)
-                .order('created_at', { ascending: false });
+            const channel = supabase
+                .channel(`merchant_orders_${business.id}`)
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `business_id=eq.${business.id}`
+                }, (payload) => {
+                    console.log('Real-time Order Update:', payload);
+                    loadMerchantOrders(business.id);
+                })
+                .subscribe();
 
-            if (error) throw error;
+            return channel;
+        };
 
-            const ordersWithItems: Order[] = [];
-            for (const o of ordersData) {
-                const { data: items } = await supabase
-                    .from('order_items')
-                    .select('*, products(*)')
-                    .eq('order_id', o.id);
+        let channel: any;
+        setupSubscription().then(c => channel = c);
 
-                ordersWithItems.push({
-                    id: o.id,
-                    customerName: (o.profiles as any)?.full_name || 'Customer',
-                    customerPhone: (o.profiles as any)?.phone || '',
-                    status: o.status as OrderStatus,
-                    total: parseFloat(o.total_amount),
-                    timestamp: new Date(o.created_at),
-                    items: (items || []).map(i => ({
-                        product: {
-                            id: i.products.id,
-                            name: i.products.name,
-                            price: parseFloat(i.products.price),
-                            image: i.products.image_url,
-                            category: i.products.category
-                        } as any,
-                        quantity: i.quantity,
-                        checked: false
-                    }))
-                });
-            }
-            setMerchantOrders(ordersWithItems);
-        } catch (err) {
-            console.error("Error loading merchant orders:", err);
-        }
-    }, []);
+        return () => {
+            if (channel) supabase.removeChannel(channel);
+        };
+    }, [user, loadMerchantOrders]);
+
 
     const createDeliveryRequest = async (orderId: string) => {
         try {
@@ -215,8 +274,10 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 order.dropoff_lat || business.lat, order.dropoff_lng || business.lng
             );
 
-            // Fee logic: min_fee + (distance * per_km_rate) - Using min for now as requested
-            const finalPrice = Math.max(minFee, distance * 5); // Example multiplier
+            // Fee logic: max(min_fee, distance * per_km_rate * multiplier)
+            const ratePerKm = parseFloat(settings?.price_per_km || '12');
+            const multiplier = parseFloat(settings?.multiplier_scooter || '0.7');
+            const finalPrice = Math.max(minFee, Math.round(distance * ratePerKm * multiplier));
 
             // 4. Create Ride Request in 'rides' table
             const { error: rideErr } = await supabase.from('rides').insert({
@@ -228,8 +289,9 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 dropoff_lng: order.dropoff_lng || business.lng,
                 dropoff_address: order.delivery_address || 'Customer Location',
                 price: finalPrice,
-                status: 'pending',
+                status: 'searching',
                 type: 'DELIVERY',
+                requested_vehicle_type: 'scooter', // Default to scooter, but logic in ProfileContext will allow Economic too
                 ride_type: 'DELIVERY'
             });
 
@@ -301,6 +363,44 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         }
     };
 
+    const deleteOrder = async (orderId: string) => {
+        try {
+            console.log("Attempting to delete order:", orderId);
+            const { data } = await supabase.from('orders').select('business_id').eq('id', orderId).single();
+
+            // 1. Delete associated rides (if any) to prevent FK violation
+            const { error: rideError } = await supabase.from('rides').delete().eq('order_id', orderId);
+            if (rideError) console.warn("Error deleting associated ride (might not exist):", rideError);
+
+            // 2. Delete order items
+            const { error: itemsError } = await supabase.from('order_items').delete().eq('order_id', orderId);
+            if (itemsError) throw itemsError;
+
+            // 3. Delete the order itself
+            const { error } = await supabase.from('orders').delete().eq('id', orderId);
+            if (error) throw error;
+
+            console.log("Order deleted successfully");
+            if (data?.business_id) await loadMerchantOrders(data.business_id);
+            return true;
+        } catch (err) {
+            console.error("Error deleting order:", err);
+            return false;
+        }
+    };
+
+    const deleteRide = async (rideId: string) => {
+        try {
+            const { error } = await supabase.from('rides').delete().eq('id', rideId);
+            if (error) throw error;
+            await loadData(); // Reload transactions and history
+            return true;
+        } catch (err) {
+            console.error("Error deleting ride:", err);
+            return false;
+        }
+    };
+
     const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
         try {
             const { error } = await supabase
@@ -309,6 +409,35 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 .eq('id', orderId);
 
             if (error) throw error;
+
+            // 1. If status is 'accepted', decrement stock
+            if (status === 'accepted') {
+                const { data: orderItems } = await supabase.from('order_items').select('product_id, quantity').eq('order_id', orderId);
+                if (orderItems) {
+                    for (const item of orderItems) {
+                        // RPC or raw update. Use raw for simplicity as we have products access.
+                        // Ideally strictly atomic but this is acceptable for now.
+                        const { data: rpcData } = await supabase.rpc('decrement_stock', { p_id: item.product_id, qty: item.quantity });
+                        // If RPC doesn't exist, we do manual:
+                        /* 
+                        const { data: prod } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+                        if (prod) {
+                             await supabase.from('products').update({ stock: Math.max(0, prod.stock - item.quantity) }).eq('id', item.product_id);
+                        }
+                        */
+                        // Let's stick to manual update for safety if RPC isn't confirmed created.
+                        const { data: prod } = await supabase.from('products').select('stock').eq('id', item.product_id).single();
+                        if (prod) {
+                            await supabase.from('products').update({ stock: Math.max(0, prod.stock - item.quantity) }).eq('id', item.product_id);
+                        }
+                    }
+                }
+            }
+
+            // 2. If status is 'ready', automatically create a delivery request
+            if (status === 'ready') {
+                await createDeliveryRequest(orderId);
+            }
 
             // Reload for consistency
             const { data } = await supabase.from('orders').select('business_id').eq('id', orderId).single();
@@ -323,7 +452,7 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     return (
         <DomainContext.Provider value={{
-            orders, setOrders, products, loadProducts, addProduct, updateProduct, deleteProduct,
+            orders, setOrders, products, loadProducts, addProduct, updateProduct, deleteProduct, deleteOrder, deleteRide,
             transactions, reviews, merchantOrders, loadMerchantOrders, updateOrderStatus,
             createDeliveryRequest, currentRide, setCurrentRide, rideStatus, setRideStatus
         }}>

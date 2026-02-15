@@ -1,35 +1,46 @@
 import React, { useState } from 'react';
-import { Clock, CheckCircle, Package, MessageSquare, X, Check } from 'lucide-react';
+import { Clock, CheckCircle, Package, MessageSquare, X, Check, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ActionButton } from '../components/ActionButton';
 import { Order, OrderStatus } from '../types';
 
 const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
     const styles = {
-        INCOMING: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
-        PENDING: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
-        PREPARING: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-        READY: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+        pending: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+        accepted: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+        preparing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+        ready: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+        delivering: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+        completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+        cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     };
 
+    const style = styles[status] || 'bg-gray-100 text-gray-800';
+
     return (
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide ${styles[status]}`}>
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide ${style}`} >
             {status}
-        </span>
+        </span >
     );
 };
 
 export const MerchantOrders: React.FC = () => {
-    const { merchantOrders, updateOrderStatus, openChat, pushNotification, createDeliveryRequest } = useApp();
+    const { merchantOrders, updateOrderStatus, openChat, pushNotification, createDeliveryRequest, deleteOrder } = useApp();
     const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL');
+    const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
     const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
         const success = await updateOrderStatus(orderId, newStatus);
         if (success) {
             pushNotification('Order Updated', `Order #${orderId.slice(0, 8)} marked as ${newStatus}`, 'ORDER');
 
-            // AUTOMATIC DELIVERY DISPATCH
-            if (newStatus === 'READY') {
+            // Update selected order in modal if open
+            if (selectedOrder && selectedOrder.id === orderId) {
+                const updated = merchantOrders.find(o => o.id === orderId);
+                if (updated) setSelectedOrder({ ...updated, status: newStatus });
+            }
+
+            if (newStatus === 'ready') {
                 const deliverySuccess = await createDeliveryRequest(orderId);
                 if (deliverySuccess) {
                     pushNotification('Delivery Search', 'Searching for nearby drivers...', 'SYSTEM');
@@ -38,14 +49,14 @@ export const MerchantOrders: React.FC = () => {
         }
     };
 
-    const handleRejectOrder = (orderId: string) => {
-        // In a real app, this would be an updateOrderStatus(orderId, 'CANCELLED')
-        // For now we'll just not show it in the UI if rejected or similar
-        alert('Order rejection logic would update DB status to CANCELLED');
-    };
-
-    const toggleItemCheck = (orderId: string, itemIndex: number) => {
-        // Local UI only for the merchant check-off list
+    const handleRejectOrder = async (orderId: string) => {
+        if (window.confirm('Are you sure you want to reject this order?')) {
+            const success = await updateOrderStatus(orderId, 'cancelled');
+            if (success) {
+                pushNotification('Order Rejected', `Order #${orderId.slice(0, 8)} has been cancelled`, 'ORDER');
+                if (selectedOrder?.id === orderId) setSelectedOrder(null);
+            }
+        }
     };
 
     const filteredOrders = filter === 'ALL' ? merchantOrders : merchantOrders.filter(o => o.status === filter);
@@ -58,7 +69,7 @@ export const MerchantOrders: React.FC = () => {
 
                 {/* Filter Pills */}
                 <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                    {['ALL', 'INCOMING', 'PENDING', 'PREPARING', 'READY'].map((s) => (
+                    {['ALL', 'pending', 'accepted', 'preparing', 'ready', 'delivering', 'completed', 'cancelled'].map((s) => (
                         <button
                             key={s}
                             onClick={() => setFilter(s as any)}
@@ -67,7 +78,7 @@ export const MerchantOrders: React.FC = () => {
                                 : 'bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-400'
                                 }`}
                         >
-                            {s === 'ALL' ? 'All Orders' : s.charAt(0) + s.slice(1).toLowerCase()}
+                            {s === 'ALL' ? 'All Orders' : s.charAt(0).toUpperCase() + s.slice(1).toLowerCase()}
                         </button>
                     ))}
                 </div>
@@ -81,93 +92,143 @@ export const MerchantOrders: React.FC = () => {
                     </div>
                 ) : (
                     filteredOrders.map(order => (
-                        <div key={order.id} className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 p-5 transition-transform active:scale-[0.99]">
+                        <div
+                            key={order.id}
+                            onClick={() => setSelectedOrder(order)}
+                            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 p-5 transition-all active:scale-[0.98] cursor-pointer hover:border-[#00E39A]/30"
+                        >
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900 dark:text-white">{order.customerName}</h3>
-                                    <p className="text-xs text-gray-500">#{order.id} • {order.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    <p className="text-xs text-gray-500">#{order.id.slice(0, 8)} • {order.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
                                 </div>
                                 <StatusBadge status={order.status} />
                             </div>
 
-                            <div className="space-y-3 mb-6">
-                                {order.items.map((item, idx) => (
-                                    <div key={idx}
-                                        onClick={() => order.status !== 'INCOMING' && toggleItemCheck(order.id, idx)}
-                                        className={`flex items-center justify-between group ${order.status !== 'INCOMING' ? 'cursor-pointer' : ''}`}
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className={`w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-800 overflow-hidden`}>
-                                                <img src={item.product.image} alt={item.product.name} className="w-full h-full object-cover" />
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className={`text-sm ${item.checked ? 'text-gray-400 line-through' : 'text-gray-800 dark:text-gray-200'}`}>
-                                                    <span className="font-bold mr-1">{item.quantity}x</span>
-                                                    {item.product.name}
-                                                </span>
-                                                <span className="text-xs text-gray-500">D{item.product.price} / item</span>
-                                            </div>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-900 dark:text-white">D{item.product.price * item.quantity}</span>
-                                    </div>
-                                ))}
+                            <div className="flex justify-between items-center text-sm font-medium">
+                                <span className="text-gray-500">{order.items.length} items</span>
+                                <span className="text-gray-900 dark:text-white">D{order.total}</span>
                             </div>
-
-                            <div className="border-t border-gray-100 dark:border-zinc-800 pt-4 flex justify-between items-center">
-                                <div className="flex items-center gap-3">
-                                    <div>
-                                        <p className="text-xs text-gray-500 uppercase tracking-wider">Total</p>
-                                        <p className="text-xl font-bold text-gray-900 dark:text-white">D{order.total}</p>
-                                    </div>
-                                    <div className="flex gap-2 ml-2">
-                                        <a
-                                            href={`https://wa.me/${order.customerPhone?.replace(/\D/g, '')}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 hover:bg-green-200"
-                                        >
-                                            <MessageSquare size={18} />
-                                        </a>
-                                        <a
-                                            href={`tel:${order.customerPhone}`}
-                                            className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-200"
-                                        >
-                                            <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h2.28a2 2 0 011.9.1.91 2.5 0 011.0.8l1.45 2.5a2 2 0 01-.4 2.1l-2.0 1.25a2 2 0 00-.8 2.2c.4 1.1 1.2 2 2.2 2.4a2 2 0 002.2-.8l1.25-2.0a2 2 0 012.1-.4l2.5 1.45a1.9 1.9 0 01.8 1.0c.3.7.2 1.5-.1 1.9a2 2 0 01-1.9.1l-2.28-.1a2 2 0 01-2-2C11 18 3 10 3 5z" />
-                                            </svg>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {order.status === 'INCOMING' && (
-                                <div className="flex gap-2 mt-4">
-                                    <button onClick={() => handleRejectOrder(order.id)} className="p-3 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-xl hover:bg-red-200">
-                                        <X size={20} />
-                                    </button>
-                                    <button onClick={() => handleStatusChange(order.id, 'PENDING')} className="px-4 bg-partner-green text-black font-bold rounded-xl hover:bg-green-400 flex items-center gap-2">
-                                        <Check size={18} /> Accept
-                                    </button>
-                                </div>
-                            )}
-
-                            {order.status === 'PENDING' && (
-                                <ActionButton size="sm" onClick={() => handleStatusChange(order.id, 'PREPARING')}>
-                                    Start Preparing
-                                </ActionButton>
-                            )}
-                            {order.status === 'PREPARING' && (
-                                <ActionButton size="sm" onClick={() => handleStatusChange(order.id, 'READY')} className="bg-partner-darkGreen text-white">
-                                    Mark Ready
-                                </ActionButton>
-                            )}
-                            {order.status === 'READY' && (
-                                <div className="text-sm text-gray-500 italic">Waiting for pickup...</div>
-                            )}
                         </div>
                     ))
                 )}
             </div>
+
+            {/* Apple-style Details Modal */}
+            {selectedOrder && (
+                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />
+                    <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 rounded-t-[32px] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                        {/* Pull Bar (Mobile) */}
+                        <div className="w-12 h-1 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto mt-3 sm:hidden" />
+
+                        <div className="p-6 max-h-[85vh] overflow-y-auto no-scrollbar">
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-14 h-14 rounded-2xl bg-gray-100 dark:bg-zinc-900 overflow-hidden border border-gray-100 dark:border-zinc-800">
+                                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${selectedOrder.customerName}`} className="w-full h-full object-cover" alt="Customer" />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-black text-gray-900 dark:text-white tracking-tight">{selectedOrder.customerName}</h2>
+                                        <p className="text-sm text-gray-500 font-bold">Order #{selectedOrder.id.slice(0, 8)}</p>
+                                    </div>
+                                </div>
+                                <button onClick={() => setSelectedOrder(null)} className="p-2 rounded-full bg-gray-100 dark:bg-zinc-900 text-gray-500">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4 mb-8">
+                                <div className="bg-gray-50 dark:bg-zinc-900/50 rounded-2xl p-4 border border-gray-100 dark:border-zinc-900">
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Status</p>
+                                    <StatusBadge status={selectedOrder.status} />
+                                </div>
+
+                                <div className="space-y-3">
+                                    {selectedOrder.items.map((item, idx) => (
+                                        <div key={idx} className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-900 overflow-hidden">
+                                                    <img src={item.product.image} className="w-full h-full object-cover" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">{item.quantity}x {item.product.name}</p>
+                                                    <p className="text-xs text-gray-500">D{item.product.price}</p>
+                                                </div>
+                                            </div>
+                                            <p className="text-sm font-black text-gray-900 dark:text-white">D{item.product.price * item.quantity}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="pt-4 border-t border-gray-100 dark:border-zinc-900 flex justify-between items-center">
+                                    <p className="text-lg font-black text-gray-900 dark:text-white">Total</p>
+                                    <p className="text-2xl font-black text-[#00E39A]">D{selectedOrder.total}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 mb-6">
+                                <a href={`tel:${selectedOrder.customerPhone}`} className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold">
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h2.28a2 2 0 011.9.1.91 2.5 0 011.0.8l1.45 2.5a2 2 0 01-.4 2.1l-2.0 1.25a2 2 0 00-.8 2.2c.4 1.1 1.2 2 2.2 2.4a2 2 0 002.2-.8l1.25-2.0a2 2 0 012.1-.4l2.5 1.45a1.9 1.9 0 01.8 1.0c.3.7.2 1.5-.1 1.9a2 2 0 01-1.9.1l-2.28-.1a2 2 0 01-2-2C11 18 3 10 3 5z" /></svg>
+                                    Call
+                                </a>
+                                <a href={`https://wa.me/${selectedOrder.customerPhone?.replace(/\D/g, '')}`} target="_blank" className="flex items-center justify-center gap-2 py-4 rounded-2xl bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 font-bold">
+                                    <MessageSquare size={20} />
+                                    WhatsApp
+                                </a>
+                            </div>
+
+                            {/* Actions Block */}
+                            <div className="space-y-3">
+                                {selectedOrder.status === 'pending' && (
+                                    <div className="flex gap-2">
+                                        <button onClick={() => handleRejectOrder(selectedOrder.id)} className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center">
+                                            <X size={24} />
+                                        </button>
+                                        <button onClick={() => handleStatusChange(selectedOrder.id, 'accepted')} className="flex-1 h-16 bg-[#00E39A] text-black font-black rounded-2xl text-lg shadow-lg">
+                                            Accept Order
+                                        </button>
+                                    </div>
+                                )}
+                                {selectedOrder.status === 'accepted' && (
+                                    <button onClick={() => handleStatusChange(selectedOrder.id, 'preparing')} className="w-full h-16 bg-black dark:bg-white text-white dark:text-black font-black rounded-2xl text-lg shadow-lg">
+                                        Start Preparing
+                                    </button>
+                                )}
+                                {selectedOrder.status === 'preparing' && (
+                                    <button onClick={() => handleStatusChange(selectedOrder.id, 'ready')} className="w-full h-16 bg-[#00E39A] text-black font-black rounded-2xl text-lg shadow-lg">
+                                        Mark as Ready
+                                    </button>
+                                )}
+                                {selectedOrder.status === 'ready' && (
+                                    <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-2xl border border-orange-100 dark:border-orange-800/30 flex items-center gap-3">
+                                        <Clock className="animate-pulse text-orange-500" size={20} />
+                                        <p className="text-orange-600 dark:text-orange-400 text-sm font-bold">Searching for a driver...</p>
+                                    </div>
+                                )}
+                                {['delivering', 'ready'].includes(selectedOrder.status) && (
+                                    <button onClick={() => handleStatusChange(selectedOrder.id, 'completed')} className="w-full h-16 bg-green-600 dark:bg-green-500 text-white font-black rounded-2xl text-lg shadow-lg mt-2">
+                                        Force Complete Order
+                                    </button>
+                                )}
+                                {['completed', 'cancelled'].includes(selectedOrder.status) && (
+                                    <button
+                                        onClick={async () => {
+                                            if (window.confirm('Delete this order record?')) {
+                                                await deleteOrder(selectedOrder.id);
+                                                setSelectedOrder(null);
+                                            }
+                                        }}
+                                        className="w-full h-16 bg-red-50 dark:bg-red-900/10 text-red-500 font-bold rounded-2xl border border-red-100 dark:border-red-900/30"
+                                    >
+                                        Delete Record
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

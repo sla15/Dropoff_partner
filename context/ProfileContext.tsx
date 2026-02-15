@@ -3,6 +3,8 @@ import { Role, UserProfile, RideRequest } from '../types';
 import { INITIAL_PROFILE } from '../data/dummyData';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { useUI } from './UIContext';
+import { initFCM } from '../utils/fcm';
 import type { User } from '@supabase/supabase-js';
 
 interface ProfileContextType {
@@ -29,7 +31,15 @@ interface ProfileContextType {
     appSettings: {
         commission_percentage: number;
         max_driver_cash_amount: number;
+        min_ride_price: number;
+        min_delivery_fee: number;
+        multiplier_scooter: number;
+        multiplier_economy: number;
+        multiplier_premium: number;
+        currency_symbol: string;
     };
+    rejectedRideIds: Set<string>;
+    setRejectedRideIds: React.Dispatch<React.SetStateAction<Set<string>>>;
     isLocked: boolean;
     isLoading: boolean; // NEW: Loading state for initialization
 }
@@ -47,11 +57,18 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [rideStats, setRideStats] = useState({ completed: 0 });
     const [orderStats, setOrderStats] = useState({ count: 0, revenue: 0 });
     const [incomingRide, setIncomingRide] = useState<RideRequest | null>(null);
+    const [rejectedRideIds, setRejectedRideIds] = useState<Set<string>>(new Set());
 
-    const [appSettings, setAppSettings] = useState<{
-        commission_percentage: number;
-        max_driver_cash_amount: number;
-    }>({ commission_percentage: 10, max_driver_cash_amount: 300 });
+    const [appSettings, setAppSettings] = useState({
+        commission_percentage: 15,
+        max_driver_cash_amount: 3000,
+        min_ride_price: 100,
+        min_delivery_fee: 2,
+        multiplier_scooter: 0.7,
+        multiplier_economy: 1,
+        multiplier_premium: 1.5,
+        currency_symbol: 'D'
+    });
 
     const uploadFile = async (file: File, bucketOverride?: string, path?: string): Promise<string | null> => {
         try {
@@ -126,15 +143,21 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             if (config) {
                 setAppSettings({
-                    commission_percentage: Number(config.commission_percentage),
-                    max_driver_cash_amount: Number(config.max_driver_cash_amount)
+                    commission_percentage: Number(config.commission_percentage || 0),
+                    max_driver_cash_amount: Number(config.max_driver_cash_amount || 0),
+                    min_ride_price: Number(config.min_ride_price || 0),
+                    min_delivery_fee: Number(config.min_delivery_fee || 0),
+                    multiplier_scooter: Number(config.multiplier_scooter || 1),
+                    multiplier_economy: Number(config.multiplier_economy || 1),
+                    multiplier_premium: Number(config.multiplier_premium || 1.5),
+                    currency_symbol: config.currency_symbol || 'D'
                 });
             }
 
             const vehicleCategoryMap: Record<string, string> = {
-                'tuktuk': 'SCOOTER_TUKTUK',
+                'scooter': 'SCOOTER_TUKTUK',
                 'economic': 'ECONOMIC',
-                'AC': 'PREMIUM'
+                'premium': 'PREMIUM'
             };
 
             const hasDriverData = !!driverData?.vehicle_model;
@@ -166,6 +189,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     images: []
                 } : undefined,
                 business: merchantData ? {
+                    id: merchantData.id,
                     businessName: merchantData.name,
                     category: merchantData.category || 'Restaurant',
                     logo: merchantData.image_url || '',
@@ -173,7 +197,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
                     phone: profileData.phone || '',
                     eWallet: 'Wave',
-                    subCategories: [],
+                    subCategories: merchantData.sub_categories || [],
                     address: merchantData.location_address,
                     lat: merchantData.lat,
                     lng: merchantData.lng,
@@ -193,6 +217,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             setProfile(mergedProfile);
             await loadStats(userId);
+
+            // NEW: Fetch active ride for driver
+            if (hasDriverData) {
+                await fetchActiveRide(userId);
+            }
 
             // Access Granted: if they are in drivers or businesses tables
             // This bypasses the need for user_roles table
@@ -217,6 +246,47 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setIsOnboarded(false);
         }
     }, [loadStats]);
+
+    const fetchActiveRide = useCallback(async (userId: string) => {
+        try {
+            const { data: activeRide, error } = await supabase
+                .from('rides')
+                .select('*')
+                .eq('driver_id', userId)
+                .in('status', ['accepted', 'arrived', 'in-progress'])
+                .maybeSingle();
+
+            if (activeRide) {
+                const { data: userData } = await supabase
+                    .from('profiles')
+                    .select('full_name, avatar_url, average_rating, phone')
+                    .eq('id', activeRide.customer_id)
+                    .single();
+
+                setIncomingRide({
+                    id: activeRide.id,
+                    customer_id: activeRide.customer_id,
+                    passengerName: userData?.full_name || 'Customer',
+                    passengerPhone: userData?.phone,
+                    passengerImage: userData?.avatar_url,
+                    passengerRating: userData?.average_rating || 5.0,
+                    rating: userData?.average_rating || 5.0,
+                    rideCount: 124, // Placeholder
+                    pickupDistance: '0 km', // Will be updated by DriverHome or location sync
+                    destination: activeRide.dropoff_address,
+                    price: parseFloat(activeRide.price),
+                    pickupLocation: activeRide.pickup_address,
+                    pickup_lat: activeRide.pickup_lat,
+                    pickup_lng: activeRide.pickup_lng,
+                    dropoff_lat: activeRide.dropoff_lat,
+                    dropoff_lng: activeRide.dropoff_lng,
+                    type: activeRide.type
+                } as any);
+            }
+        } catch (err) {
+            console.error("Error fetching active ride:", err);
+        }
+    }, []);
 
     const updateActiveRole = async (newRole: Role) => {
         setRole(newRole);
@@ -264,28 +334,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         if (user) {
-            // Get OneSignal Player ID and save to database
-            // OneSignal is already initialized in index.html
-            setTimeout(() => {
-                window.OneSignalDeferred?.push(async (OneSignal: any) => {
-                    try {
-                        const userId = await OneSignal.User.PushSubscription.id;
-                        if (userId) {
-                            await supabase.from('profiles')
-                                .update({ onesignal_player_id: userId })
-                                .eq('id', user.id);
-                        }
-                    } catch (error) {
-                        console.error('Error saving OneSignal player ID:', error);
-                    }
-                });
-            }, 2000); // Wait 2 seconds for OneSignal to fully initialize
+            // Initialize FCM and sync token to Supabase
+            initFCM(user.id);
         } else {
             setIsOnboarded(false);
         }
-    }, [user, loadUserData]);
+    }, [user]);
 
     // Real-time Location Sync (watchPosition when online)
+    const lastLocationUpdateTime = useRef<number>(0);
     useEffect(() => {
         let watchId: number | null = null;
 
@@ -294,14 +351,20 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 watchId = navigator.geolocation.watchPosition(
                     async (position) => {
                         const { latitude, longitude, heading } = position.coords;
-                        // Local update for map responsiveness
+
+                        // Local state update for smooth map movement (UI only)
                         updateProfile({ currentLat: latitude, currentLng: longitude, heading: heading || 0 });
-                        // Sync to DB
-                        await supabase.from('drivers').update({
-                            current_lat: latitude,
-                            current_lng: longitude,
-                            heading: heading || 0,
-                        }).eq('id', user.id);
+
+                        // Throttled DB Sync: Only every 10 seconds
+                        const now = Date.now();
+                        if (now - lastLocationUpdateTime.current > 10000) {
+                            lastLocationUpdateTime.current = now;
+                            await supabase.from('drivers').update({
+                                current_lat: latitude,
+                                current_lng: longitude,
+                                heading: heading || 0,
+                            }).eq('id', user.id);
+                        }
                     },
                     (err) => console.error("Location watch error:", err),
                     { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
@@ -348,6 +411,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (!user || role !== 'DRIVER' || !profile.isOnline) return;
 
+        const driverVehicleType = profile.vehicle?.type;
+
         const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
             const R = 6371; // km
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -365,10 +430,36 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 event: 'INSERT',
                 schema: 'public',
                 table: 'rides',
-                filter: `status=eq.pending`
+                filter: `status=eq.searching`
             }, (payload) => {
                 const newRide = payload.new;
-                handleNewRide(newRide);
+
+                const rideVehicleTypeMapping: Record<string, string> = {
+                    'scooter': 'SCOOTER_TUKTUK',
+                    'economic': 'ECONOMIC',
+                    'premium': 'PREMIUM'
+                };
+                const rideType = rideVehicleTypeMapping[newRide.requested_vehicle_type] || 'ECONOMIC';
+
+                const isEligibleForDelivery = (driverVehicleType === 'SCOOTER_TUKTUK' || driverVehicleType === 'ECONOMIC') && newRide.type === 'DELIVERY';
+
+                if (!rejectedRideIds.has(newRide.id) && (rideType === driverVehicleType || isEligibleForDelivery)) {
+                    handleNewRide(newRide);
+                }
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'rides'
+            }, (payload) => {
+                const updatedRide = payload.new;
+                // If the updated ride is our current incoming ride and is no longer searching, clear it
+                setIncomingRide(prev => {
+                    if (prev && prev.id === updatedRide.id && updatedRide.status !== 'searching') {
+                        return null;
+                    }
+                    return prev;
+                });
             })
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
@@ -380,15 +471,38 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
 
         const fetchPendingRides = async () => {
-            const { data: pendingRides } = await supabase
+            const driverVehicleType = profile.vehicle?.type;
+            const dbVehicleMapping: Record<string, string> = {
+                'SCOOTER_TUKTUK': 'scooter',
+                'ECONOMIC': 'economic',
+                'PREMIUM': 'premium'
+            };
+            const dbType = dbVehicleMapping[driverVehicleType || 'ECONOMIC'] || 'economic';
+
+            // Query for rides matching vehicle type OR delivery rides if eligible
+            const isDeliveryEligible = driverVehicleType === 'SCOOTER_TUKTUK' || driverVehicleType === 'ECONOMIC';
+
+            let query = supabase
                 .from('rides')
                 .select('*')
-                .eq('status', 'pending')
+                .eq('status', 'searching');
+
+            if (isDeliveryEligible) {
+                // If delivery eligible, show rides of their type OR any delivery ride
+                query = query.or(`requested_vehicle_type.eq.${dbType},type.eq.DELIVERY`);
+            } else {
+                query = query.eq('requested_vehicle_type', dbType);
+            }
+
+            const { data: pendingRides } = await query
                 .order('created_at', { ascending: false })
-                .limit(1); // Just get the latest one for now to avoid spam
+                .limit(1);
 
             if (pendingRides && pendingRides.length > 0) {
-                handleNewRide(pendingRides[0]);
+                const latestRide = pendingRides[0];
+                if (!rejectedRideIds.has(latestRide.id)) {
+                    handleNewRide(latestRide);
+                }
             }
         };
 
@@ -396,8 +510,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const startTime = new Date().getTime();
 
             // Interval to check distance with expanding radius
-            const checkInterval = setInterval(() => {
+            const checkInterval = setInterval(async () => {
                 if (!profile.currentLat || !profile.currentLng) return;
+
+                // Check if ride is still available
+                const { data: currentRideStatus } = await supabase.from('rides').select('status').eq('id', newRide.id).single();
+                if (currentRideStatus?.status !== 'searching') {
+                    clearInterval(checkInterval);
+                    return;
+                }
 
                 const distance = calculateDistance(
                     profile.currentLat,
@@ -411,17 +532,34 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const dynamicRadius = 3 + (Math.floor(elapsedSeconds / 5) * 2);
 
                 if (distance <= dynamicRadius) {
-                    setIncomingRide({
-                        id: newRide.id,
-                        passengerName: 'New Request',
-                        rating: 4.8,
-                        rideCount: 124,
-                        pickupDistance: `${distance.toFixed(1)} km`,
-                        destination: newRide.dropoff_address,
-                        price: parseFloat(newRide.price),
-                        pickupLocation: newRide.pickup_address,
-                        type: newRide.type
-                    } as any);
+                    // Fetch real passenger data
+                    const fetchPassenger = async () => {
+                        const { data: userData } = await supabase
+                            .from('profiles')
+                            .select('full_name, avatar_url, average_rating, phone')
+                            .eq('id', newRide.customer_id)
+                            .single();
+
+                        setIncomingRide({
+                            id: newRide.id,
+                            customer_id: newRide.customer_id,
+                            passengerName: userData?.full_name || 'New Request',
+                            passengerPhone: userData?.phone,
+                            passengerImage: userData?.avatar_url,
+                            passengerRating: userData?.average_rating || 5.0,
+                            rating: userData?.average_rating || 5.0,
+                            rideCount: 124, // Keep as placeholder for now unless there's a ride_count column
+                            pickupDistance: `${distance.toFixed(1)} km`,
+                            destination: newRide.dropoff_address,
+                            price: parseFloat(newRide.price),
+                            pickupLocation: newRide.pickup_address,
+                            pickup_lat: newRide.pickup_lat,
+                            pickup_lng: newRide.pickup_lng,
+                            type: newRide.type
+                        } as any);
+                    };
+
+                    fetchPassenger();
                     clearInterval(checkInterval);
                 }
 
@@ -437,7 +575,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 console.error('Error removing channel:', error);
             }
         };
-    }, [user, role, profile.isOnline, profile.currentLat, profile.currentLng]);
+    }, [user, role, profile.isOnline, profile.currentLat, profile.currentLng, rejectedRideIds]);
 
     const completeOnboarding = async (targetProfile?: UserProfile) => {
         const activeProfile = targetProfile || profile;
@@ -449,7 +587,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             // Determine the final role (driver, merchant, or both)
             let finalRole = role.toLowerCase();
-            const existingRole = (await supabase.from('profiles').select('role').eq('id', user.id).single()).data?.role;
+            const { data: profileCheck } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+            const existingRole = profileCheck?.role;
 
             if (existingRole === 'both' || secondaryOnboardingRole || (activeProfile.vehicle && activeProfile.business) || (existingRole === 'driver' && activeProfile.business) || (existingRole === 'merchant' && activeProfile.vehicle)) {
                 finalRole = 'both';
@@ -458,20 +597,22 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 else if (activeProfile.business) finalRole = 'merchant';
             }
 
-            // 1. Sync Base Profile
-            const { error: profileError } = await supabase.from('profiles').update({
-                onboarded: true,
-                role: finalRole,
+            // 1. Sync Base Profile using upsert to handle cases where trigger didn't create the row
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: user.id,
+                full_name: activeProfile.name || (user.user_metadata?.full_name),
+                phone: activeProfile.phone || user.phone,
+                role: finalRole as any,
                 active_role: finalRole === 'both' ? 'DRIVER' : finalRole.toUpperCase()
-            }).eq('id', user.id);
+            }, { onConflict: 'id' });
             if (profileError) throw profileError;
 
             // 2. Sync Driver Data if exists
             if (activeProfile.vehicle) {
                 const vehicleMapping: Record<string, string> = {
-                    'SCOOTER_TUKTUK': 'tuktuk',
+                    'SCOOTER_TUKTUK': 'scooter',
                     'ECONOMIC': 'economic',
-                    'PREMIUM': 'AC'
+                    'PREMIUM': 'premium'
                 };
 
                 const categoryValue = vehicleMapping[activeProfile.vehicle?.type || 'ECONOMIC'] || 'economic';
@@ -481,7 +622,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     vehicle_model: activeProfile.vehicle?.model,
                     vehicle_plate: activeProfile.vehicle?.plate,
                     vehicle_color: activeProfile.vehicle?.color,
-                    vehicle_category: categoryValue,
+                    vehicle_category: categoryValue as any,
                     is_online: activeProfile.isOnline,
                     approval_status: 'pending',
                     submitted_at: new Date().toISOString()
@@ -510,10 +651,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     lat: activeProfile.business?.lat,
                     lng: activeProfile.business?.lng,
                     payment_phone: activeProfile.business?.paymentPhone,
+                    sub_categories: activeProfile.business?.subCategories || [],
                     submitted_at: new Date().toISOString(),
                     approval_status: 'pending'
                 }, { onConflict: 'owner_id' });
                 if (businessError) console.error("Business Sync Error:", businessError);
+
+                // TURN OFF Driver status when becoming a Merchant
+                const { error: offlineError } = await supabase.from('drivers').update({ is_online: false }).eq('id', user.id);
+                if (offlineError) console.error("Error turning off driver status:", offlineError);
 
                 if (activeProfile.documents.idCard?.url) {
                     const { error: merchDocError } = await supabase.from('merchant_documents').upsert({
@@ -527,6 +673,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             setIsOnboarded(true);
             setSecondaryOnboardingRole(null);
+            await loadUserData(user.id);
         } catch (err) {
             console.error("Onboarding Sync Error:", err);
             // Don't set onboarded true on error to allow retry
@@ -553,15 +700,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // 2. Sync Driver Data if exists
             if (targetProfile.vehicle) {
                 const vehicleMapping: Record<string, string> = {
-                    'SCOOTER_TUKTUK': 'tuktuk',
+                    'SCOOTER_TUKTUK': 'scooter',
                     'ECONOMIC': 'economic',
-                    'PREMIUM': 'AC'
+                    'PREMIUM': 'premium'
                 };
                 const { error: driverError } = await supabase.from('drivers').update({
                     vehicle_model: targetProfile.vehicle.model,
                     vehicle_plate: targetProfile.vehicle.plate,
                     vehicle_color: targetProfile.vehicle.color,
-                    vehicle_category: vehicleMapping[targetProfile.vehicle.type] || 'economic',
+                    vehicle_category: (vehicleMapping[targetProfile.vehicle.type] || 'economic') as any,
                     is_online: targetProfile.isOnline,
                     profile_picture: targetProfile.driverProfilePic
                 }).eq('id', user.id);
@@ -588,6 +735,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     lat: targetProfile.business.lat,
                     lng: targetProfile.business.lng,
                     payment_phone: targetProfile.business.paymentPhone,
+                    sub_categories: targetProfile.business.subCategories || []
                 }).eq('owner_id', user.id);
                 if (businessError) console.error("Business Sync Error:", businessError);
 
@@ -626,6 +774,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setProfile(prev => ({ ...prev, isOnline: !newStatus }));
         }
     };
+    const { showAlert } = useUI();
+
     const payCommission = async () => {
         if (!user || profile.commissionDebt <= 0) return;
         const amountToPay = profile.commissionDebt;
@@ -650,7 +800,12 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         } catch (err: any) {
             console.error("Error initiating Wave payment:", err);
-            alert("Error: " + (err.message || "Failed to initiate payment"));
+
+            // Simplified Grammar (Grade 5)
+            const simplifiedMessage = "Sorry, we couldn't start the payment right now. " +
+                "If Wave is not working, you can pay at our office or use our Wave business number.";
+
+            showAlert("Payment Error", simplifiedMessage);
         }
     };
 
@@ -676,7 +831,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             secondaryOnboardingRole, startSecondaryOnboarding: (r) => { setRole(r); setSecondaryOnboardingRole(r); },
             cancelSecondaryOnboarding: () => setSecondaryOnboardingRole(null),
             toggleOnlineStatus, payCommission, signOut, uploadFile, loadUserData, syncProfile, updateActiveRole,
-            rideStats, orderStats, incomingRide, setIncomingRide, appSettings,
+            rideStats, orderStats, incomingRide, setIncomingRide,
+            rejectedRideIds, setRejectedRideIds,
+            appSettings,
             isLocked: (profile.commissionDebt > appSettings.max_driver_cash_amount) || profile.isSuspended,
             isLoading
         }}>

@@ -1,7 +1,8 @@
 
 import React from 'react';
-import { Star, Navigation, MessageSquare, X, Wallet, CheckCircle, MapPin, EyeOff, Play, Check } from 'lucide-react';
+import { Star, Navigation, MessageSquare, X, Wallet, CheckCircle, MapPin, EyeOff, Play, Check, Phone, MessageCircle } from 'lucide-react';
 import { RideRequest, RideStatus } from '../types';
+import { SlideButton } from './SlideButton';
 
 interface RideDrawerProps {
     currentRide: RideRequest;
@@ -44,7 +45,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
     const drawerHeight = isDrawerExpanded
         ? 'h-[92vh]'
         : isNavigating
-            ? 'h-[180px]'
+            ? 'h-[320px]'
             : 'h-[460px]';
 
     return (
@@ -80,28 +81,39 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                         <div className="flex items-center gap-3">
                             <div className="relative">
                                 <div className="w-14 h-14 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden border-2 border-white dark:border-gray-600">
-                                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentRide.passengerName}`} alt="User" className="w-full h-full object-cover" />
+                                    <img
+                                        src={rideStatus === 'RINGING'
+                                            ? `https://api.dicebear.com/7.x/shapes/svg?seed=masked`
+                                            : (currentRide.passengerImage || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentRide.passengerName}`)}
+                                        alt="User"
+                                        className={`w-full h-full object-cover ${rideStatus === 'RINGING' ? 'opacity-40 grayscale animate-pulse' : ''}`}
+                                    />
                                 </div>
                                 <div className="absolute -bottom-1 -right-1 bg-white dark:bg-[#2C2C2E] px-1.5 py-0.5 rounded-full flex items-center gap-0.5 border border-gray-100 dark:border-gray-700 shadow-sm">
                                     <Star size={10} className="text-yellow-500 fill-current" />
-                                    <span className="text-gray-900 dark:text-white text-[10px] font-bold">{currentRide.rating}</span>
+                                    <span className="text-gray-900 dark:text-white text-[10px] font-bold">{currentRide.passengerRating || currentRide.rating}</span>
                                 </div>
                             </div>
                             <div>
                                 <div className="flex flex-col gap-1">
-                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none">{currentRide.passengerName}</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none">
+                                        {rideStatus === 'RINGING' ? 'New Passenger' : currentRide.passengerName}
+                                    </h3>
                                     {isRideActive && (
                                         <div className="flex gap-2 mt-1">
-                                            {rideStatus === 'NAVIGATING' && (
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onComplete(); }}
-                                                    className="text-[#00E39A] text-[10px] font-bold border border-[#00E39A]/30 px-2 py-1 rounded-full hover:bg-[#00E39A]/10 animate-pulse"
-                                                >
-                                                    End Ride
-                                                </button>
+                                            {rideStatus === 'ACCEPTED' && (
+                                                <span className="text-blue-500 text-[10px] font-black uppercase tracking-widest animate-pulse">Driving to Pickup</span>
                                             )}
                                             {rideStatus === 'ARRIVED' && (
-                                                <span className="text-blue-500 text-[10px] font-black uppercase tracking-widest">At Pickup</span>
+                                                <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest">At Pickup • Waiting</span>
+                                            )}
+                                            {rideStatus === 'NAVIGATING' && (
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest animate-pulse">Trip in Progress</span>
+                                                </div>
+                                            )}
+                                            {rideStatus === 'COMPLETED' && (
+                                                <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Trip Completed</span>
                                             )}
                                         </div>
                                     )}
@@ -109,13 +121,13 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             </div>
                         </div>
                         <div className="text-right">
-                            {(rideStatus === 'RINGING' || rideStatus === 'ACCEPTED') ? (
+                            {(rideStatus === 'RINGING' || rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED' || rideStatus === 'NAVIGATING') ? (
                                 <div className="flex flex-col items-end opacity-50">
                                     <div className="flex items-center gap-1.5 text-gray-400">
                                         <EyeOff size={16} />
                                         <span className="text-xl font-bold italic tracking-tighter">D ••••</span>
                                     </div>
-                                    <div className="text-[9px] font-black uppercase tracking-widest mt-1">Reveal at {rideType === 'DELIVERY' ? 'Pickup' : 'Arrival'}</div>
+                                    <div className="text-[9px] font-black uppercase tracking-widest mt-1">Reveal at {rideStatus === 'NAVIGATING' ? 'Completion' : 'Arrival'}</div>
                                 </div>
                             ) : rideStatus === 'COMPLETED' ? (
                                 <div className="animate-in zoom-in duration-300 flex flex-col items-end">
@@ -159,13 +171,15 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             <div className="flex gap-4 mb-6 relative z-10 opacity-60">
                                 <div className="mt-1 w-4 h-4 rounded-full border-[2px] border-dashed border-gray-400 bg-gray-50 dark:bg-zinc-800 shrink-0"></div>
                                 <div className="flex-1 filter blur-[4px]">
-                                    <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-0.5">DESTINATION</div>
-                                    <h4 className="text-gray-400 font-bold text-lg leading-tight">•••••••• ••••••••</h4>
+                                    <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-0.5">DESTINATION (GENERAL AREA)</div>
+                                    <h4 className="text-gray-400 font-bold text-lg leading-tight">
+                                        {currentRide.destination.split(',').slice(-2).join(',').trim() || 'General Area'}
+                                    </h4>
                                 </div>
                                 <div className="absolute inset-0 flex items-center justify-center">
                                     <div className="bg-white/80 dark:bg-black/60 backdrop-blur-sm px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700 flex items-center gap-2">
                                         <EyeOff size={12} className="text-gray-400" />
-                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Hidden until start</span>
+                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Address hidden until start</span>
                                     </div>
                                 </div>
                             </div>
@@ -196,8 +210,9 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
 
                     {/* Actions Area */}
                     <div className={`pb-20 transition-all duration-300 ${isNavigating && !isDrawerExpanded ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
-                        {rideStatus === 'RINGING' && (
-                            <div className="space-y-3">
+                        <div className="space-y-4">
+                            {/* 1. Contextual Action Stack */}
+                            {rideStatus === 'RINGING' && (
                                 <button
                                     onClick={onAccept}
                                     className="w-full bg-[#00E39A] hover:bg-[#00C285] active:scale-[0.98] transition-all h-14 rounded-full flex items-center justify-between px-2 relative overflow-hidden shadow-lg"
@@ -222,67 +237,91 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                         <span className="absolute text-[10px] font-black text-black">{countdown}</span>
                                     </div>
                                 </button>
-                                <button onClick={onDecline} className="w-full py-3 text-red-500 font-black text-sm flex items-center justify-center gap-2">
-                                    <X size={16} /> Decline Request
-                                </button>
-                            </div>
-                        )}
+                            )}
 
-                        {rideStatus === 'ACCEPTED' && (
-                            <div className="space-y-3">
+                            {rideStatus === 'ACCEPTED' && (
                                 <button
                                     onClick={onArrived}
-                                    className="w-full bg-blue-500 text-white h-14 rounded-2xl font-black active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-lg"
+                                    className="w-full bg-blue-500 text-white h-14 rounded-2xl font-black active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-lg uppercase tracking-widest"
                                 >
                                     <MapPin size={22} /> I HAVE ARRIVED
                                 </button>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button onClick={onChat} className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-900 dark:text-white h-14 rounded-2xl flex items-center justify-center border border-gray-200 dark:border-gray-700 font-black text-sm uppercase tracking-widest gap-2">
-                                        <MessageSquare size={18} /> Chat
-                                    </button>
-                                    <button onClick={onCancel} className="bg-gray-100 dark:bg-[#2C2C2E] text-red-500 h-14 rounded-2xl flex items-center justify-center border border-gray-200 dark:border-gray-700 font-black text-sm uppercase tracking-widest gap-2">
-                                        <X size={18} /> Cancel
-                                    </button>
-                                </div>
-                            </div>
-                        )}
+                            )}
 
-                        {rideStatus === 'ARRIVED' && (
-                            <div className="space-y-3">
+                            {rideStatus === 'ARRIVED' && (
                                 <button
                                     onClick={onStartRide}
-                                    className="w-full bg-[#00E39A] text-black h-16 rounded-2xl font-black active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-xl animate-pulse"
+                                    className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-beta active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-lg uppercase tracking-widest font-black"
                                 >
-                                    <Play size={24} fill="currentColor" /> START RIDE
+                                    <Play size={22} fill="currentColor" /> START TRIP
                                 </button>
-                                <button onClick={onChat} className="w-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-900 dark:text-white h-14 rounded-2xl flex items-center justify-center font-black text-sm uppercase tracking-widest gap-2 shadow-sm">
-                                    <MessageSquare size={18} /> Message Passenger
-                                </button>
-                            </div>
-                        )}
+                            )}
 
-                        {rideStatus === 'NAVIGATING' && (
-                            <div className="grid grid-cols-4 gap-3">
+                            {rideStatus === 'NAVIGATING' && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <a
+                                            href={`tel:${currentRide.passengerPhone}`}
+                                            className="bg-[#00E39A] text-black h-14 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform border border-[#00E39A]/20"
+                                        >
+                                            <Phone size={18} fill="currentColor" /> CALL
+                                        </a>
+                                        <a
+                                            href={`sms:${currentRide.passengerPhone}`}
+                                            className="bg-blue-500 text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform border border-blue-400/20"
+                                        >
+                                            <MessageCircle size={18} fill="currentColor" /> MESSAGE
+                                        </a>
+                                    </div>
+
+                                    <SlideButton
+                                        label="Slide to Cancel Ride"
+                                        description="Emergency end session"
+                                        onSlideComplete={onCancel}
+                                        activeColor="#EF4444"
+                                        baseColor="bg-red-50 dark:bg-red-900/10"
+                                    />
+                                </div>
+                            )}
+
+                            {rideStatus === 'COMPLETED' && (
                                 <button
-                                    onClick={onComplete}
-                                    className="col-span-3 bg-red-500 text-white h-14 rounded-2xl font-black active:scale-95 transition-transform flex items-center justify-center gap-2 shadow-lg"
+                                    onClick={onCollectPayment}
+                                    className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-black active:scale-95 transition-transform mt-1 shadow-lg hover:bg-[#00C285] flex items-center justify-center gap-2"
                                 >
-                                    <CheckCircle size={20} /> END RIDE
+                                    <Wallet size={20} /> Collect Payment
                                 </button>
-                                <button onClick={onChat} className="col-span-1 bg-gray-100 dark:bg-[#2C2C2E] h-14 rounded-2xl flex items-center justify-center border border-gray-200 dark:border-gray-700 text-slate-500">
-                                    <MessageSquare size={24} />
-                                </button>
-                            </div>
-                        )}
+                            )}
 
-                        {rideStatus === 'COMPLETED' && (
-                            <button
-                                onClick={onCollectPayment}
-                                className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-black active:scale-95 transition-transform mt-1 shadow-lg hover:bg-[#00C285] flex items-center justify-center gap-2"
-                            >
-                                <Wallet size={20} /> Collect Payment
-                            </button>
-                        )}
+                            {/* 2. Secondary Support Actions (SMS Integration) */}
+                            {rideStatus !== 'IDLE' && rideStatus !== 'RINGING' && rideStatus !== 'COMPLETED' && rideStatus !== 'NAVIGATING' && (
+                                <a
+                                    href={`sms:${currentRide.passengerPhone}`}
+                                    className="w-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-900 dark:text-white h-14 rounded-2xl flex items-center justify-center border border-gray-200 dark:border-gray-700 font-black text-sm uppercase tracking-widest gap-2 active:scale-95 transition-transform"
+                                >
+                                    <MessageSquare size={18} /> Message Passenger
+                                </a>
+                            )}
+
+                            {/* 3. Pre-trip Cancellation (SMALL RED BUTTON) */}
+                            {rideStatus === 'RINGING' && (
+                                <button
+                                    onClick={onDecline}
+                                    className="w-full py-4 text-red-500 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10 rounded-2xl active:scale-95 transition-transform"
+                                >
+                                    <X size={18} /> Decline {rideType === 'DELIVERY' ? 'Delivery' : 'Ride'}
+                                </button>
+                            )}
+
+                            {(rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED') && (
+                                <button
+                                    onClick={onCancel}
+                                    className="w-full py-4 text-red-500 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10 rounded-2xl active:scale-95 transition-transform"
+                                >
+                                    <X size={18} /> Cancel {rideType === 'DELIVERY' ? 'Delivery' : 'Ride'}
+                                </button>
+                            )}
+                        </div>
                     </div>
 
                 </div>

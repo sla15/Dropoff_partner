@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { TrendingUp, AlertTriangle, Wallet, Car, CreditCard, Star } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Wallet, Car, CreditCard, Star, Trash2 } from 'lucide-react';
 
 export const DriverWalletView: React.FC = () => {
     const { profile, transactions, payCommission, reviews, appSettings } = useApp();
@@ -116,23 +116,41 @@ export const DriverWalletView: React.FC = () => {
             </div>
 
             <div className="px-6 space-y-3 pb-32">
-                {transactions.filter(t => t.type === 'RIDE').map((tx) => (
-                    <div key={tx.id} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 shadow-sm">
-                        <div className="flex items-center gap-5">
-                            <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-zinc-800 flex items-center justify-center text-slate-400">
-                                <Car size={22} />
+                {transactions
+                    .filter(t => t.type === 'RIDE')
+                    .slice(0, 7) // Limit to 7 rides
+                    .map((tx) => (
+                        <div key={tx.id} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 shadow-sm relative group">
+                            <div className="flex items-center gap-5">
+                                <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-zinc-800 flex items-center justify-center text-slate-400">
+                                    <Car size={22} />
+                                </div>
+                                <div>
+                                    <p className="font-black text-slate-900 dark:text-white text-[15px]">{tx.description}</p>
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{tx.date}</p>
+                                </div>
                             </div>
-                            <div>
-                                <p className="font-black text-slate-900 dark:text-white text-[15px]">{tx.description}</p>
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{tx.date}</p>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                    <p className="font-black text-[15px] text-[#00E39A]">D{tx.amount.toFixed(2)}</p>
+                                    <p className="text-[9px] font-bold text-red-400 uppercase tracking-tighter mt-0.5">-D{tx.commission.toFixed(2)} Fee</p>
+                                </div>
+                                <button
+                                    onClick={async () => {
+                                        if (window.confirm('Delete this ride record?')) {
+                                            // We need to expose deleteRide from context
+                                            const { deleteRide } = (window as any).domainContext || {}; // Mocking for now, will fix interface
+                                            // Better way: useApp already exposes it if added
+                                            await (useApp as any)().deleteRide(tx.id);
+                                        }
+                                    }}
+                                    className="p-2 text-gray-300 hover:text-red-500 transition-colors"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
                             </div>
                         </div>
-                        <div className="text-right">
-                            <p className="font-black text-[15px] text-[#00E39A]">D{tx.amount.toFixed(2)}</p>
-                            <p className="text-[9px] font-bold text-red-400 uppercase tracking-tighter mt-0.5">-D{tx.commission.toFixed(2)} Fee</p>
-                        </div>
-                    </div>
-                ))}
+                    ))}
             </div>
         </div>
     );

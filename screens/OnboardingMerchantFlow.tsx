@@ -16,7 +16,7 @@ const DARK_MAP_STYLES = [{ elementType: "geometry", stylers: [{ color: "#242f3e"
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ step, onNext }) => {
-  const { updateProfile, isDarkMode, uploadFile, profile } = useApp();
+  const { updateProfile, isDarkMode, uploadFile, profile, showAlert } = useApp();
   const [isUploading, setIsUploading] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
@@ -82,7 +82,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
     setIsLocating(true);
     const google = (window as any).google;
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      showAlert("GPS Error", "Your phone can't find your location. Please check your settings.");
       setIsLocating(false);
       return;
     }
@@ -101,7 +101,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
         });
       },
       () => {
-        alert("Unable to retrieve your location");
+        showAlert("GPS Error", "We couldn't find where you are. Please pick your location on the map.");
         setIsLocating(false);
       }
     );
@@ -123,7 +123,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
   };
 
   const addSubCategory = () => {
-    if (newSubCat.trim() && business.subCategories.length < 8) {
+    if (newSubCat.trim() && business.subCategories.length < 6) {
       setBusiness(prev => ({ ...prev, subCategories: [...prev.subCategories, newSubCat.trim()] }));
       setNewSubCat('');
     }
@@ -215,8 +215,19 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase ml-2 block">Product Groups / Tags</label>
             <div className="flex gap-2">
-              <input value={newSubCat} onChange={e => setNewSubCat(e.target.value)} placeholder="e.g. Afra, Pizza, Sushi..." className="flex-1 bg-slate-100 dark:bg-zinc-900 p-4 rounded-xl font-bold dark:text-white border-none focus:ring-2 focus:ring-[#00E39A]" />
-              <button onClick={addSubCategory} disabled={business.subCategories.length >= 8 || !newSubCat.trim()} className="w-14 h-14 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center disabled:opacity-30"><Plus size={24} /></button>
+              <input
+                value={newSubCat}
+                onChange={e => setNewSubCat(e.target.value)}
+                placeholder="e.g. Afra, Pizza, Sushi..."
+                className="flex-1 bg-gray-100 dark:bg-[#1C1C1E] p-4 rounded-2xl font-medium text-lg text-gray-900 dark:text-white border border-transparent focus:ring-2 focus:ring-[#00E39A] outline-none transition-all placeholder-gray-400"
+              />
+              <button
+                onClick={addSubCategory}
+                disabled={business.subCategories.length >= 6 || !newSubCat.trim()}
+                className="w-14 h-14 bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl flex items-center justify-center disabled:opacity-30"
+              >
+                <Plus size={24} />
+              </button>
             </div>
             <div className="flex flex-wrap gap-2">
               {business.subCategories.map((cat, idx) => (
@@ -265,7 +276,23 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
           </div>
         </div>
 
-        <button onClick={handleNextWithData} disabled={!business.name || isUploading !== null} className="w-full font-bold py-5 rounded-[22px] mt-6 bg-slate-900 dark:bg-white text-white dark:text-black shadow-xl shrink-0">Complete Setup</button>
+
+
+        <button
+          onClick={handleNextWithData}
+          disabled={
+            !business.name ||
+            !business.address ||
+            !business.paymentPhone ||
+            !business.category ||
+            !business.eWallet ||
+            business.subCategories.length === 0 ||
+            isUploading !== null
+          }
+          className="w-full font-bold py-5 rounded-[22px] mt-6 bg-slate-900 dark:bg-white text-white dark:text-black shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Complete Setup
+        </button>
 
         {/* Pin Store Options Overlay */}
         {merchantLocMode === 'OPTIONS' && (
@@ -360,7 +387,21 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
         </p>
       </div>
 
-      <button onClick={() => onNext()} disabled={isUploading !== null || !profile.documents.idCard?.url} className="w-full bg-slate-900 dark:bg-white text-white dark:text-black font-black py-5 rounded-[22px] mt-auto shadow-xl active:scale-[0.98] transition-all">Finish Setup</button>
+      <div className="mt-auto space-y-3">
+        <button
+          onClick={() => onNext()}
+          disabled={isUploading !== null}
+          className="w-full bg-slate-900 dark:bg-white text-white dark:text-black font-black py-5 rounded-[22px] shadow-xl active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          Finish Setup
+        </button>
+        <button
+          onClick={() => onNext()}
+          className="w-full bg-transparent text-slate-400 font-bold py-2 text-sm uppercase tracking-widest"
+        >
+          Skip for Now
+        </button>
+      </div>
     </div>
   );
 };
