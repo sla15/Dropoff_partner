@@ -84,7 +84,7 @@ export const MerchantOrders: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-6 pb-24 pt-2 space-y-4 no-scrollbar">
+            <div className="flex-1 overflow-y-auto px-6 pb-32 pt-2 space-y-4 no-scrollbar">
                 {filteredOrders.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                         <Package size={48} className="mb-2 opacity-50" />
@@ -95,19 +95,33 @@ export const MerchantOrders: React.FC = () => {
                         <div
                             key={order.id}
                             onClick={() => setSelectedOrder(order)}
-                            className="bg-white dark:bg-zinc-900 rounded-2xl shadow-sm border border-gray-100 dark:border-zinc-800 p-5 transition-all active:scale-[0.98] cursor-pointer hover:border-[#00E39A]/30"
+                            className="bg-white dark:bg-zinc-900 rounded-[28px] shadow-sm border border-gray-100 dark:border-zinc-800 p-5 transition-all active:scale-[0.98] cursor-pointer hover:border-[#00E39A]/30 relative overflow-hidden"
                         >
                             <div className="flex justify-between items-start mb-4">
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{order.customerName}</h3>
-                                    <p className="text-xs text-gray-500">#{order.id.slice(0, 8)} • {order.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-black overflow-hidden border border-slate-100 dark:border-zinc-800">
+                                        {order.items[0]?.product.image ? (
+                                            <img src={order.items[0].product.image} className="w-full h-full object-cover" alt="Product" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                <Package size={20} />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <h3 className="text-[17px] font-black text-gray-900 dark:text-white leading-tight">{order.customerName}</h3>
+                                        <p className="text-[11px] text-gray-500 font-bold uppercase tracking-wider">#{order.id.slice(0, 8)} • {order.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                                    </div>
                                 </div>
                                 <StatusBadge status={order.status} />
                             </div>
 
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-gray-500">{order.items.length} items</span>
-                                <span className="text-gray-900 dark:text-white">D{order.total}</span>
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">{order.items.length} {order.items.length === 1 ? 'item' : 'items'}</span>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="text-[11px] font-bold text-gray-400">Total</span>
+                                    <span className="text-xl font-black text-[#00E39A]">D{order.total}</span>
+                                </div>
                             </div>
                         </div>
                     ))
@@ -116,9 +130,9 @@ export const MerchantOrders: React.FC = () => {
 
             {/* Apple-style Details Modal */}
             {selectedOrder && (
-                <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedOrder(null)} />
-                    <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 rounded-t-[32px] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-300">
+                <div className="fixed inset-0 z-[150] flex items-end justify-center sm:items-center">
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setSelectedOrder(null)} />
+                    <div className="relative w-full max-w-lg bg-white dark:bg-zinc-950 rounded-t-[42px] sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom duration-500">
                         {/* Pull Bar (Mobile) */}
                         <div className="w-12 h-1 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto mt-3 sm:hidden" />
 
@@ -144,19 +158,25 @@ export const MerchantOrders: React.FC = () => {
                                     <StatusBadge status={selectedOrder.status} />
                                 </div>
 
-                                <div className="space-y-3">
+                                <div className="space-y-4">
                                     {selectedOrder.items.map((item, idx) => (
-                                        <div key={idx} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-900 overflow-hidden">
-                                                    <img src={item.product.image} className="w-full h-full object-cover" />
+                                        <div key={idx} className="flex items-center justify-between bg-white dark:bg-zinc-900 p-3 rounded-[24px] border border-slate-50 dark:border-zinc-800">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-14 h-14 rounded-2xl bg-gray-50 dark:bg-black overflow-hidden border border-slate-100 dark:border-zinc-800 shadow-sm shrink-0">
+                                                    {item.product.image ? (
+                                                        <img src={item.product.image} className="w-full h-full object-cover" alt={item.product.name} />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                            <Package size={24} />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-bold text-gray-900 dark:text-white">{item.quantity}x {item.product.name}</p>
-                                                    <p className="text-xs text-gray-500">D{item.product.price}</p>
+                                                    <p className="text-[17px] font-black text-gray-900 dark:text-white leading-tight">{item.quantity}x {item.product.name}</p>
+                                                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">D{item.product.price} each</p>
                                                 </div>
                                             </div>
-                                            <p className="text-sm font-black text-gray-900 dark:text-white">D{item.product.price * item.quantity}</p>
+                                            <p className="text-[17px] font-black text-gray-900 dark:text-white">D{item.product.price * item.quantity}</p>
                                         </div>
                                     ))}
                                 </div>

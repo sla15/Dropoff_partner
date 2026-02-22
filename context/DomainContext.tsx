@@ -241,23 +241,53 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const createDeliveryRequest = async (orderId: string) => {
         try {
-            // 1. Fetch Order and Business Data
+            // 1. Fetch Order and its Batch info
             const { data: order, error: orderErr } = await supabase
                 .from('orders')
-                .select('*, businesses(*), profiles(*)')
+                .select('*, businesses(*)')
                 .eq('id', orderId)
                 .single();
 
             if (orderErr || !order) throw new Error("Order not found");
 
-            const business = order.businesses;
-            const customer = order.profiles;
+            const batchId = order.batch_id;
 
-            // 2. Fetch Settings for Fee
+            // 2. Fetch all orders in this batch that are 'ready' or already 'delivering'
+            const { data: batchOrders } = await supabase
+                .from('orders')
+                .select('*, businesses(*)')
+                .eq('batch_id', batchId)
+                .in('status', ['ready', 'delivering', 'preparing', 'accepted']);
+
+            // 3. Calculate Total Cash Upfront (sum of order item totals)
+            const totalCashUpfront = batchOrders?.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0) || parseFloat(order.total_amount);
+
+            // 4. Collect all pickup stops (unique business addresses)
+            const stops = Array.from(new Set(batchOrders?.map(o => o.businesses?.location_address).filter(Boolean))) as string[];
+
+            // 5. Fetch Settings for Fee
             const { data: settings } = await supabase.from('app_settings').select('*').limit(1).single();
-            const minFee = parseFloat(settings?.min_delivery_fee || '2');
 
-            // 3. Calculate distance (Simplified for now - can use a helper later)
+            // 6. Check if a ride already exists for this batch
+            const { data: existingRide } = await supabase
+                .from('rides')
+                .select('*')
+                .eq('batch_id', batchId)
+                .neq('status', 'completed')
+                .neq('status', 'cancelled')
+                .maybeSingle();
+
+            if (existingRide) {
+                // Update existing ride with new stops and cash total
+                await supabase.from('rides').update({
+                    stops,
+                    total_cash_upfront: totalCashUpfront,
+                }).eq('id', existingRide.id);
+                return true;
+            }
+
+            // 7. If no existing ride, create a new one
+            // Calculate distance for the primary order (first stop)
             const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
                 const R = 6371;
                 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -269,19 +299,20 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 return R * c;
             };
 
+            const business = order.businesses;
             const distance = calculateDistance(
                 business.lat, business.lng,
                 order.dropoff_lat || business.lat, order.dropoff_lng || business.lng
             );
 
-            // Fee logic: max(min_fee, distance * per_km_rate * multiplier)
+            const minFee = parseFloat(settings?.min_delivery_fee || '100');
             const ratePerKm = parseFloat(settings?.price_per_km || '12');
             const multiplier = parseFloat(settings?.multiplier_scooter || '0.7');
             const finalPrice = Math.max(minFee, Math.round(distance * ratePerKm * multiplier));
 
-            // 4. Create Ride Request in 'rides' table
             const { error: rideErr } = await supabase.from('rides').insert({
                 customer_id: order.customer_id,
+                batch_id: batchId,
                 pickup_lat: business.lat,
                 pickup_lng: business.lng,
                 pickup_address: business.location_address,
@@ -291,8 +322,10 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 price: finalPrice,
                 status: 'searching',
                 type: 'DELIVERY',
-                requested_vehicle_type: 'scooter', // Default to scooter, but logic in ProfileContext will allow Economic too
-                ride_type: 'DELIVERY'
+                requested_vehicle_type: 'scooter',
+                ride_type: 'DELIVERY',
+                stops: stops,
+                total_cash_upfront: totalCashUpfront
             });
 
             if (rideErr) throw rideErr;

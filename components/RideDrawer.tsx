@@ -122,12 +122,20 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                         </div>
                         <div className="text-right">
                             {(rideStatus === 'RINGING' || rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED' || rideStatus === 'NAVIGATING') ? (
-                                <div className="flex flex-col items-end opacity-50">
-                                    <div className="flex items-center gap-1.5 text-gray-400">
-                                        <EyeOff size={16} />
-                                        <span className="text-xl font-bold italic tracking-tighter">D ••••</span>
+                                <div className="flex flex-col items-end">
+                                    {rideType === 'DELIVERY' && currentRide.total_cash_upfront ? (
+                                        <div className="mb-2 text-right">
+                                            <div className="text-orange-500 text-sm font-black uppercase tracking-widest leading-none">Cash Needed</div>
+                                            <div className="text-orange-600 dark:text-orange-400 text-2xl font-black">D{currentRide.total_cash_upfront}</div>
+                                        </div>
+                                    ) : null}
+                                    <div className="flex flex-col items-end opacity-50">
+                                        <div className="flex items-center gap-1.5 text-gray-400">
+                                            <EyeOff size={16} />
+                                            <span className="text-xl font-bold italic tracking-tighter">D ••••</span>
+                                        </div>
+                                        <div className="text-[9px] font-black uppercase tracking-widest mt-1">Reveal Fee at {rideStatus === 'NAVIGATING' ? 'Completion' : 'Arrival'}</div>
                                     </div>
-                                    <div className="text-[9px] font-black uppercase tracking-widest mt-1">Reveal at {rideStatus === 'NAVIGATING' ? 'Completion' : 'Arrival'}</div>
                                 </div>
                             ) : rideStatus === 'COMPLETED' ? (
                                 <div className="animate-in zoom-in duration-300 flex flex-col items-end">
@@ -154,24 +162,39 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             <div className={`absolute top-0 bottom-0 left-0 right-0 bg-gradient-to-b from-[#00E39A] to-transparent ${isRideStarted ? 'h-full' : 'h-1/2'}`}></div>
                         </div>
 
-                        {/* Pickup */}
-                        <div className="flex gap-4 mb-6 relative z-10">
-                            <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
-                            <div>
-                                <div className="flex items-center gap-2 mb-0.5">
-                                    <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest">PICKUP</span>
-                                    <span className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-[10px] px-1.5 py-0.5 rounded">{currentRide.pickupDistance} Away</span>
+                        {/* Pickup(s) */}
+                        {currentRide.stops && currentRide.stops.length > 0 ? (
+                            currentRide.stops.map((stop, index) => (
+                                <div key={index} className="flex gap-4 mb-6 relative z-10">
+                                    <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest">PICKUP {currentRide.stops!.length > 1 ? index + 1 : ''}</span>
+                                            {index === 0 && <span className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-[10px] px-1.5 py-0.5 rounded">{currentRide.pickupDistance} Away</span>}
+                                        </div>
+                                        <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{stop}</h4>
+                                    </div>
                                 </div>
-                                <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{currentRide.pickupLocation}</h4>
+                            ))
+                        ) : (
+                            <div className="flex gap-4 mb-6 relative z-10">
+                                <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
+                                <div>
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest">PICKUP</span>
+                                        <span className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-[10px] px-1.5 py-0.5 rounded">{currentRide.pickupDistance} Away</span>
+                                    </div>
+                                    <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{currentRide.pickupLocation}</h4>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* Stops - Masked until started */}
+                        {/* Destination - Masked until started */}
                         {!isRideStarted ? (
                             <div className="flex gap-4 mb-6 relative z-10 opacity-60">
                                 <div className="mt-1 w-4 h-4 rounded-full border-[2px] border-dashed border-gray-400 bg-gray-50 dark:bg-zinc-800 shrink-0"></div>
                                 <div className="flex-1 filter blur-[4px]">
-                                    <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-0.5">DESTINATION (GENERAL AREA)</div>
+                                    <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-0.5">DROP-OFF (GENERAL AREA)</div>
                                     <h4 className="text-gray-400 font-bold text-lg leading-tight">
                                         {currentRide.destination.split(',').slice(-2).join(',').trim() || 'General Area'}
                                     </h4>
@@ -184,27 +207,13 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                 </div>
                             </div>
                         ) : (
-                            <>
-                                {/* Stops (if any) */}
-                                {currentRide.stops?.map((stop, index) => (
-                                    <div key={index} className="flex gap-4 mb-6 relative z-10">
-                                        <div className="mt-1 w-4 h-4 rounded-full border-[2px] border-gray-400 bg-gray-100 dark:bg-zinc-800 shrink-0 z-20"></div>
-                                        <div>
-                                            <div className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-0.5">STOP {index + 1}</div>
-                                            <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{stop}</h4>
-                                        </div>
-                                    </div>
-                                ))}
-
-                                {/* Destination */}
-                                <div className="flex gap-4 relative z-10">
-                                    <div className="mt-1 w-4 h-4 border-[2px] border-gray-400 dark:border-white bg-white dark:bg-[#1C1C1E] shrink-0 rounded-[2px]"></div>
-                                    <div>
-                                        <div className="text-gray-400 dark:text-gray-500 text-[10px] font-black uppercase tracking-widest mb-0.5">DESTINATION</div>
-                                        <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{currentRide.destination}</h4>
-                                    </div>
+                            <div className="flex gap-4 relative z-10">
+                                <div className="mt-1 w-4 h-4 border-[2px] border-gray-400 dark:border-white bg-white dark:bg-[#1C1C1E] shrink-0 rounded-[2px]"></div>
+                                <div>
+                                    <div className="text-gray-400 dark:text-gray-500 text-[10px] font-black uppercase tracking-widest mb-0.5">DROP-OFF</div>
+                                    <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{currentRide.destination}</h4>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
 

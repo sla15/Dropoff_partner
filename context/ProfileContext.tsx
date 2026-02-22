@@ -101,7 +101,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const { data: business } = await supabase.from('businesses').select('id').eq('owner_id', userId).maybeSingle();
             if (business) {
                 const { count: orderCount } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('business_id', business.id);
-                const { data: revenueData } = await supabase.from('orders').select('total_amount').eq('business_id', business.id);
+                // Total revenue only from COMPLETED orders for accuracy
+                const { data: revenueData } = await supabase.from('orders').select('total_amount').eq('business_id', business.id).eq('status', 'completed');
                 const totalRevenue = revenueData?.reduce((acc, curr) => acc + (Number(curr.total_amount) || 0), 0) || 0;
                 setOrderStats({ count: orderCount || 0, revenue: totalRevenue });
             }
@@ -441,10 +442,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 };
                 const rideType = rideVehicleTypeMapping[newRide.requested_vehicle_type] || 'ECONOMIC';
 
-                const isEligibleForDelivery = (driverVehicleType === 'SCOOTER_TUKTUK' || driverVehicleType === 'ECONOMIC') && newRide.type === 'DELIVERY';
+                const isEligibleForDelivery = newRide.type === 'DELIVERY';
 
-                if (!rejectedRideIds.has(newRide.id) && (rideType === driverVehicleType || isEligibleForDelivery)) {
+                const estCommission = (parseFloat(newRide.price || '0') * appSettings.commission_percentage) / 100;
+                const isOverDebtLimit = (profile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+
+                if (!rejectedRideIds.has(newRide.id) && !isOverDebtLimit && (rideType === driverVehicleType || isEligibleForDelivery)) {
                     handleNewRide(newRide);
+                } else if (isOverDebtLimit && isEligibleForDelivery) {
+                    console.log("[ProfileContext] Ride blocked due to debt debt:", profile.commissionDebt);
                 }
             })
             .on('postgres_changes', {
@@ -479,8 +485,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
             const dbType = dbVehicleMapping[driverVehicleType || 'ECONOMIC'] || 'economic';
 
-            // Query for rides matching vehicle type OR delivery rides if eligible
-            const isDeliveryEligible = driverVehicleType === 'SCOOTER_TUKTUK' || driverVehicleType === 'ECONOMIC';
+            // Query for rides matching vehicle type OR any delivery ride
+            const isDeliveryEligible = true; // All vehicles now eligible for delivery
 
             let query = supabase
                 .from('rides')
@@ -500,7 +506,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             if (pendingRides && pendingRides.length > 0) {
                 const latestRide = pendingRides[0];
-                if (!rejectedRideIds.has(latestRide.id)) {
+                const estCommission = (parseFloat(latestRide.price || '0') * appSettings.commission_percentage) / 100;
+                const isOverDebtLimit = (profile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+
+                if (!rejectedRideIds.has(latestRide.id) && !isOverDebtLimit) {
                     handleNewRide(latestRide);
                 }
             }

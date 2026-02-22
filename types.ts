@@ -42,6 +42,7 @@ export interface RideRequest {
   pickup_lng?: number;
   stops?: string[];
   type?: 'PASSENGER' | 'DELIVERY';
+  total_cash_upfront?: number;
 }
 
 export interface Transaction {

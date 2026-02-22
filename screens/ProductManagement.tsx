@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Toggle } from '../components/Toggle';
 import { Product } from '../types';
-import { Edit2, Plus, X, Image as ImageIcon, ChevronDown, Upload, Trash2 } from 'lucide-react';
+import { Edit2, Plus, X, Image as ImageIcon, ChevronDown, Upload, Trash2, MoreVertical } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export const ProductManagement: React.FC = () => {
@@ -13,6 +13,7 @@ export const ProductManagement: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
     // New Product Form State
     const [newProduct, setNewProduct] = useState({
@@ -184,10 +185,42 @@ export const ProductManagement: React.FC = () => {
                                                     </p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => handleDeleteProduct(product.id)} className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/10 text-red-500 flex items-center justify-center"><Trash2 size={18} /></button>
-                                                <button onClick={() => openEditModal(product)} className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/10 text-blue-500 flex items-center justify-center"><Edit2 size={18} /></button>
+                                            <div className="relative flex items-center gap-2">
                                                 <Toggle checked={product.isAvailable} onChange={() => toggleAvailability(product.id, product.isAvailable)} />
+                                                <button
+                                                    onClick={() => setActiveMenuId(activeMenuId === product.id ? null : product.id)}
+                                                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white transition-colors"
+                                                >
+                                                    <MoreVertical size={20} />
+                                                </button>
+
+                                                {activeMenuId === product.id && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-20" onClick={() => setActiveMenuId(null)} />
+                                                        <div className="absolute right-0 top-12 w-48 bg-white dark:bg-zinc-800 rounded-2xl shadow-xl border border-gray-100 dark:border-zinc-700 overflow-hidden z-30 animate-in fade-in zoom-in duration-200">
+                                                            <button
+                                                                onClick={() => {
+                                                                    openEditModal(product);
+                                                                    setActiveMenuId(null);
+                                                                }}
+                                                                className="w-full px-4 py-3.5 flex items-center gap-3 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-750 transition-colors"
+                                                            >
+                                                                <Edit2 size={16} className="text-blue-500" />
+                                                                Edit Product
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    handleDeleteProduct(product.id);
+                                                                    setActiveMenuId(null);
+                                                                }}
+                                                                className="w-full px-4 py-3.5 flex items-center gap-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                                Delete Product
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
 
@@ -306,22 +339,27 @@ export const ProductManagement: React.FC = () => {
                                 </div>
                                 <div className="flex-1">
                                     <label className="text-xs font-bold text-gray-500 uppercase ml-1">Product Group</label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            list="group-suggestions"
+                                    <div className="relative mt-1">
+                                        <select
                                             value={editingProduct ? editingProduct.category : newProduct.category}
-                                            onChange={(e) => editingProduct ? setEditingProduct({ ...editingProduct, category: e.target.value }) : setNewProduct({ ...newProduct, category: e.target.value })}
-                                            className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-xl mt-1 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00E39A] text-lg"
-                                            placeholder="Select Group"
-                                        />
-                                        <datalist id="group-suggestions">
-                                            {availableGroups.map(c => <option key={c} value={c} />)}
-                                        </datalist>
-                                        <div className="absolute right-4 top-[60%] -translate-y-1/2 pointer-events-none text-gray-400">
-                                            <ChevronDown size={16} />
+                                            onChange={(e) => editingProduct
+                                                ? setEditingProduct({ ...editingProduct, category: e.target.value })
+                                                : setNewProduct({ ...newProduct, category: e.target.value })
+                                            }
+                                            className="w-full bg-gray-50 dark:bg-zinc-800 p-4 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#00E39A] text-lg appearance-none cursor-pointer"
+                                        >
+                                            <option value="" disabled>Select Group</option>
+                                            {availableGroups.map(c => <option key={c} value={c}>{c}</option>)}
+                                        </select>
+                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                            <ChevronDown size={18} />
                                         </div>
                                     </div>
+                                    {availableGroups.length === 0 && (
+                                        <p className="text-[10px] text-orange-500 font-bold mt-1.5 ml-1 px-1 leading-tight">
+                                            Add groups in Profile &gt; Business Details first
+                                        </p>
+                                    )}
                                 </div>
                             </div>
 

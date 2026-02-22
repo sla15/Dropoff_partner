@@ -157,6 +157,13 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
   };
 
   const handleNextWithData = () => {
+    // Rigid Validation
+    if (!business.name.trim()) return showAlert("Missing Info", "Please enter your Business Name.");
+    if (!business.category) return showAlert("Missing Info", "Please select a Business Category.");
+    if (!business.address || !business.locationSet) return showAlert("Missing Info", "Please pin your store location on the map.");
+    if (!business.paymentPhone.trim()) return showAlert("Missing Info", "Please enter your Wave/Payment phone number.");
+    if (business.subCategories.length === 0) return showAlert("Missing Info", "Please add at least one Product Group or Tag (e.g. Pizza).");
+
     updateProfile({
       location: business.address,
       business: {
@@ -167,7 +174,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
         workingHours: business.workingHours,
         workingDays: business.workingDays,
         subCategories: business.subCategories,
-        phone: '',
+        phone: business.paymentPhone, // Sync to primary phone field too
         eWallet: business.eWallet,
         website: business.website,
         lat: business.lat,
@@ -194,26 +201,26 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
             <span className="text-[10px] font-black text-slate-400 uppercase mt-3 tracking-widest">Store Logo</span>
           </div>
 
-          <Input label="Shop Name" value={business.name} onChange={e => setBusiness({ ...business, name: e.target.value })} placeholder="Musa's Kitchen" />
+          <Input label="Shop Name *" value={business.name} onChange={e => setBusiness({ ...business, name: e.target.value })} placeholder="Musa's Kitchen" />
 
           <div className="grid grid-cols-2 gap-4">
-            <Dropdown label="Category" value={business.category} options={categories} onChange={val => setBusiness({ ...business, category: val })} />
-            <Dropdown label="Payout Method" value={business.eWallet} options={[{ label: 'Wave', value: 'Wave' }, { label: 'Afrimoney', value: 'Afrimoney' }, { label: 'Qmoney', value: 'Qmoney' }]} onChange={val => setBusiness({ ...business, eWallet: val as any })} />
+            <Dropdown label="Category *" value={business.category} options={categories} onChange={val => setBusiness({ ...business, category: val })} />
+            <Dropdown label="Payout Method *" value={business.eWallet} options={[{ label: 'Wave', value: 'Wave' }, { label: 'Afrimoney', value: 'Afrimoney' }, { label: 'Qmoney', value: 'Qmoney' }]} onChange={val => setBusiness({ ...business, eWallet: val as any })} />
           </div>
 
           <Input
-            label="Wave / Payment Number"
+            label="Wave / Payment Number *"
             value={business.paymentPhone}
             onChange={e => setBusiness({ ...business, paymentPhone: e.target.value })}
             placeholder="e.g. 7123456"
             type="tel"
           />
 
-          <Input label="Website" value={business.website} onChange={e => setBusiness({ ...business, website: e.target.value })} placeholder="www.yourstore.gm" leftElement={<Globe size={18} className="text-slate-400 ml-4 mr-[-8px]" />} />
+          <Input label="Website (Optional)" value={business.website} onChange={e => setBusiness({ ...business, website: e.target.value })} placeholder="www.yourstore.gm" leftElement={<Globe size={18} className="text-slate-400 ml-4 mr-[-8px]" />} />
 
           {/* Subcategories */}
           <div className="space-y-2">
-            <label className="text-xs font-bold text-gray-500 uppercase ml-2 block">Product Groups / Tags</label>
+            <label className="text-xs font-bold text-gray-500 uppercase ml-2 block">Product Groups / Tags * (Min 1)</label>
             <div className="flex gap-2">
               <input
                 value={newSubCat}
@@ -230,6 +237,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
               </button>
             </div>
             <div className="flex flex-wrap gap-2">
+              {business.subCategories.length === 0 && <span className="text-[10px] text-red-400 font-bold uppercase ml-2">Add at least 1 group</span>}
               {business.subCategories.map((cat, idx) => (
                 <div key={idx} className="bg-[#00E39A]/10 text-[#00E39A] px-3 py-1.5 rounded-full font-bold text-xs flex items-center gap-1.5 border border-[#00E39A]/20">
                   {cat} <button onClick={() => removeSubCategory(idx)}><X size={12} /></button>
@@ -258,9 +266,9 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
             </div>
           </div>
 
-          {/* Location Selection Logic Updated per User Request */}
+          {/* Location Selection */}
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-slate-400 uppercase ml-2 block tracking-wider">STORE LOCATION</label>
+            <label className="text-[11px] font-bold text-slate-400 uppercase ml-2 block tracking-wider">STORE LOCATION *</label>
             <button
               onClick={() => setMerchantLocMode('OPTIONS')}
               className={`w-full flex items-center justify-between p-5 rounded-[24px] bg-slate-50 dark:bg-zinc-900 border border-transparent hover:bg-slate-100 dark:hover:bg-zinc-850 transition-all ${business.locationSet ? 'ring-2 ring-green-500' : ''}`}
@@ -268,7 +276,7 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
               <div className="flex items-center gap-4">
                 <MapPin className={business.locationSet ? 'text-green-500' : 'text-slate-400'} size={24} />
                 <span className={`text-[17px] font-bold truncate max-w-[200px] ${business.locationSet ? 'text-green-600 dark:text-green-400' : 'text-slate-900 dark:text-white'}`}>
-                  {business.address || 'Pin location on map'}
+                  {business.address || 'Pin location on map *'}
                 </span>
               </div>
               <ChevronRight size={20} className="text-slate-300" />
@@ -276,19 +284,9 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
           </div>
         </div>
 
-
-
         <button
           onClick={handleNextWithData}
-          disabled={
-            !business.name ||
-            !business.address ||
-            !business.paymentPhone ||
-            !business.category ||
-            !business.eWallet ||
-            business.subCategories.length === 0 ||
-            isUploading !== null
-          }
+          disabled={isUploading !== null}
           className="w-full font-bold py-5 rounded-[22px] mt-6 bg-slate-900 dark:bg-white text-white dark:text-black shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Complete Setup

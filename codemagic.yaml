@@ -1,0 +1,50 @@
+workflows:
+  android-workflow:
+    name: Android Workflow
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      node: latest
+      groups:
+        - google_play # For publishing
+      vars:
+        PACKAGE_NAME: "com.dropoffgambia.partner"
+    scripts:
+      - name: Install dependencies
+        script: npm install
+      - name: Build web assets
+        script: npm run build
+      - name: Capacitor Sync
+        script: npx cap sync android
+      - name: Build Android (Debug/Release)
+        script: |
+          cd android
+          ./gradlew assembleDebug
+    artifacts:
+      - android/app/build/outputs/apk/**/*.apk
+
+  ios-workflow:
+    name: iOS Workflow
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      node: latest
+      xcode: latest
+      cocoapods: default
+      groups:
+        - app_store_credentials # For publishing
+    scripts:
+      - name: Install dependencies
+        script: npm install
+      - name: Build web assets
+        script: npm run build
+      - name: Capacitor Sync
+        script: |
+          npx cap sync ios
+          npx cap update ios
+      - name: Build iOS
+        script: |
+          cd ios/App
+          xcodebuild -workspace App.xcworkspace -scheme App -configuration Debug -allowProvisioningUpdates build
+    artifacts:
+      - ios/App/build/Release-iphoneos/*.ipa

@@ -14,11 +14,18 @@ export const ProfileMerchantView: React.FC = () => {
         <div className="bg-[#00E39A]/10 dark:bg-[#00E39A]/5 p-8 rounded-[32px] border border-[#00E39A]/20 dark:border-[#00E39A]/10 shadow-sm relative overflow-hidden group transition-all">
           <div className="relative z-10">
             <p className="text-[11px] font-black text-[#00C285] dark:text-[#00E39A] uppercase tracking-[0.25em] mb-2 opacity-80">Store Performance</p>
-            <div className="flex items-baseline gap-2">
-              <p className="text-5xl font-black text-slate-900 dark:text-white leading-tight tracking-tighter">{orderStats.count}</p>
-              <div className="h-2 w-2 rounded-full bg-[#00E39A] mb-2"></div>
-            </div>
+            <div className="flex items-baseline justify-between w-full">
+              <div className="flex items-baseline gap-2">
+                <p className="text-5xl font-black text-slate-900 dark:text-white leading-tight tracking-tighter">{orderStats.count}</p>
+                <div className="h-2 w-2 rounded-full bg-[#00E39A] mb-2"></div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-1">Orders</p>
+              </div>
 
+              <div className="text-right">
+                <p className="text-2xl font-black text-slate-900 dark:text-white leading-tight tracking-tighter">D{orderStats.revenue.toLocaleString()}</p>
+                <p className="text-[9px] font-black text-[#00C285] dark:text-[#00E39A] uppercase tracking-widest mt-0.5">Total Revenue</p>
+              </div>
+            </div>
           </div>
 
           {/* Decorative background accents */}
