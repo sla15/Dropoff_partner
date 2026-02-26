@@ -16,7 +16,7 @@ export const MerchantWalletView: React.FC = () => {
             {/* Earnings Overview */}
             <div className="mx-6 mt-6 bg-[#00E39A] rounded-[32px] p-8 shadow-xl relative overflow-hidden">
                 <div className="relative z-10 text-center">
-                    <p className="text-slate-900/60 text-[10px] font-black tracking-[0.2em] uppercase mb-2">Total Revenue</p>
+                    <p className="text-slate-900/60 text-[10px] font-black tracking-[0.2em] uppercase mb-2">Total Money Made</p>
                     <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">D{totalRevenue.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
 
                     <div className="inline-flex items-center gap-2 bg-black/10 px-4 py-2 rounded-full border border-black/10">
@@ -31,7 +31,7 @@ export const MerchantWalletView: React.FC = () => {
             {/* Stats Grid */}
             <div className="mx-6 mt-6 grid grid-cols-1 gap-4">
                 <div className="bg-white dark:bg-zinc-900 p-6 rounded-[28px] border border-slate-100 dark:border-zinc-800 shadow-sm">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">Avail. Payout</p>
+                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash to Collect</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white">D{profile.walletBalance.toLocaleString()}</p>
                     <button className="mt-3 text-[#00E39A] text-[10px] font-black uppercase flex items-center gap-1">Request <ArrowUpRight size={10} /></button>
                 </div>
@@ -72,7 +72,7 @@ export const MerchantWalletView: React.FC = () => {
 
             {/* Sales History */}
             <div className="px-8 mt-10 mb-6 flex justify-between items-end">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Sales History</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">My Sales</h3>
                 <button className="text-[#00E39A] text-xs font-black uppercase tracking-widest">Export</button>
             </div>
 

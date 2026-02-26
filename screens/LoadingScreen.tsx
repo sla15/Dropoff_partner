@@ -26,8 +26,8 @@ export const LoadingScreen: React.FC = () => {
 
             {/* App Name - Slides from left */}
             <div className="text-center animate-slide-in-left">
-                <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2 tracking-tight flex items-center justify-center">
-                    DROP<span className="text-[#00E39A] ml-0.5">OFF</span>
+                <h1 className="text-4xl font-black mb-2 tracking-tight flex items-center justify-center">
+                    <span className="text-[#535351]">DROP</span><span className="text-[#00E39A] ml-0.5">OFF</span>
                 </h1>
                 <p className="text-[11px] font-black text-slate-500 dark:text-zinc-500 uppercase tracking-[0.4em] mb-6 pl-1">
                     Driver & Business

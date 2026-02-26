@@ -57,7 +57,7 @@ export const ProfileMerchantView: React.FC = () => {
           <ChevronRight size={20} className="text-slate-300" />
         </button>
 
-        <button onClick={() => setActiveDrawer('VERIFICATION')} className="w-full bg-white dark:bg-zinc-900 p-5 rounded-[24px] flex items-center justify-between border border-slate-100 dark:border-slate-800 shadow-sm active:scale-[0.99] transition-all">
+        <button onClick={() => setActiveDrawer('BUSINESS')} className="w-full bg-white dark:bg-zinc-900 p-5 rounded-[24px] flex items-center justify-between border border-slate-100 dark:border-slate-800 shadow-sm active:scale-[0.99] transition-all">
           <div className="flex items-center gap-5">
             <div className="w-11 h-11 rounded-full bg-green-50 dark:bg-green-900/10 text-[#00E39A] flex items-center justify-center"><ShieldCheck size={22} /></div>
             <div className="text-left">
@@ -67,6 +67,31 @@ export const ProfileMerchantView: React.FC = () => {
           </div>
           <ChevronRight size={20} className="text-slate-300" />
         </button>
+
+        <div className="bg-slate-50 dark:bg-zinc-900/50 p-6 rounded-[28px] border border-slate-100 dark:border-zinc-800">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-xl bg-[#00E39A]/10 text-[#00E39A] flex items-center justify-center">
+              <Store size={16} />
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opening Schedule</p>
+          </div>
+
+          <div className="flex justify-between items-center bg-white dark:bg-zinc-800 p-4 rounded-2xl mb-3">
+            <p className="font-bold text-slate-900 dark:text-white">Hours</p>
+            <p className="font-black text-[#00E39A]">{profile.business?.workingHours.start} - {profile.business?.workingHours.end}</p>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => {
+              const isActive = profile.business?.workingDays.includes(day);
+              return (
+                <div key={day} className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter ${isActive ? 'bg-[#00E39A] text-slate-900' : 'bg-slate-200 dark:bg-zinc-800 text-slate-400'}`}>
+                  {day}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
 
       <ProfileDrawers activeDrawer={activeDrawer} onClose={() => setActiveDrawer(null)} onActiveDrawerChange={setActiveDrawer} />

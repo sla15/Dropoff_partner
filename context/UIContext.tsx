@@ -21,9 +21,14 @@ interface UIContextType {
 const UIContext = createContext<UIContextType | undefined>(undefined);
 
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [isDarkMode, setIsDarkMode] = useState(() =>
-        window.matchMedia('(prefers-color-scheme: dark)').matches
-    );
+    const [isDarkMode, setIsDarkMode] = useState(() => {
+        const hasThemePreference = window.matchMedia('(prefers-color-scheme: dark)').matches ||
+            window.matchMedia('(prefers-color-scheme: light)').matches;
+
+        // Default to dark if no clear preference or if it matches dark
+        if (!hasThemePreference) return true;
+        return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    });
     const [currentTab, setCurrentTab] = useState('home');
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);

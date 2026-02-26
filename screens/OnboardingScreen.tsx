@@ -205,9 +205,9 @@ export const OnboardingScreen: React.FC = () => {
               />
             </div>
           </div>
-          <h1 className="text-[52px] font-black text-slate-900 dark:text-white leading-[0.9] tracking-tighter mb-4">
-            DROP<span className="text-[#00E39A]">OFF</span><br />
-            <span className="text-[42px]">Driver & Business</span>
+          <h1 className="text-[52px] font-black leading-[0.9] tracking-tighter mb-4">
+            <span className="text-[#535351]">DROP</span><span className="text-[#00E39A]">OFF</span><br />
+            <span className="text-[42px] text-slate-900 dark:text-white">Driver & Business</span>
           </h1>
           <p className="text-slate-500 text-xl max-w-[280px] leading-relaxed font-medium">Partner with the network. Drive or Sell in The Gambia.</p>
         </div>

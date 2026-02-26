@@ -41,11 +41,28 @@ export const RatingModal: React.FC<RatingModalProps> = ({
 
                 {!hasCollectedPayment ? (
                     <>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Final Settlement</h3>
-                        <p className="text-gray-400 text-sm mb-6">Confirm payment from {currentRide?.passengerName}</p>
-                        <div className="bg-gray-50 dark:bg-zinc-800/50 rounded-2xl py-6 px-4 my-6 border border-gray-100 dark:border-white/5">
-                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Total to Collect</p>
+                        <div className="mb-4">
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentRide?.type === 'DELIVERY' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'}`}>
+                                {currentRide?.type === 'DELIVERY' ? 'Delivery Summary' : 'Ride Summary'}
+                            </span>
+                        </div>
+
+                        <div className="text-left space-y-3 mb-6 bg-gray-50 dark:bg-white/5 p-4 rounded-2xl border border-gray-100 dark:border-white/5">
+                            <div>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest leading-none mb-1">From</p>
+                                <p className="text-sm font-bold text-gray-900 dark:text-white line-clamp-1">{currentRide?.pickupLocation || currentRide?.pickup_address}</p>
+                            </div>
+                            <div className="w-full h-px bg-gray-200 dark:bg-white/10" />
+                            <div>
+                                <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest leading-none mb-1">To</p>
+                                <p className="text-sm font-bold text-gray-900 dark:text-white line-clamp-1">{currentRide?.destination || currentRide?.dropoff_address}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#00E39A]/10 dark:bg-[#00E39A]/5 rounded-2xl py-6 px-4 mb-6 border border-[#00E39A]/20">
+                            <p className="text-[10px] text-[#00E39A] uppercase font-black tracking-widest mb-1">Final Amount</p>
                             <p className="text-4xl font-black text-[#00E39A]">{appSettings.currency_symbol}{currentRide?.price?.toFixed(2)}</p>
+                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Confirm payment from {currentRide?.passengerName}</p>
                         </div>
                         <button
                             onClick={() => setHasCollectedPayment(true)}

@@ -43,6 +43,14 @@ export interface RideRequest {
   stops?: string[];
   type?: 'PASSENGER' | 'DELIVERY';
   total_cash_upfront?: number;
+  merchantPhone?: string;
+  businessName?: string;
+  merchants?: {
+    name: string;
+    phone: string;
+    amount: number;
+    address: string;
+  }[];
 }
 
 export interface Transaction {

@@ -175,27 +175,27 @@ export const ProfileScreen: React.FC = () => {
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSupportDrawer(false)} />
             <div className="relative bg-white dark:bg-zinc-900 w-full rounded-t-[2.5rem] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-300">
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto mb-8" />
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 text-center">Contact Support</h2>
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 text-center">Contact DROPOFF</h2>
               <p className="text-slate-500 dark:text-slate-400 text-center mb-8 px-4 font-bold">To delete your account, please reach out to our team via any of these channels.</p>
 
               <div className="space-y-3">
-                <a href="tel:+" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
+                <a href="tel:+2203888888" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-500/10 text-blue-500 flex items-center justify-center"><Phone size={20} /></div>
-                    <span className="font-black text-slate-900 dark:text-white">Call Business</span>
+                    <span className="font-black text-slate-900 dark:text-white">Call +220 3888888</span>
                   </div>
                   <ChevronRight size={18} className="text-slate-300" />
                 </a>
 
-                <a href="https://wa.me/" target="_blank" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
+                <a href="https://wa.me/2203888888" target="_blank" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-green-50 dark:bg-green-500/10 text-green-500 flex items-center justify-center"><MessageCircle size={20} /></div>
-                    <span className="font-black text-slate-900 dark:text-white">WhatsApp Message</span>
+                    <span className="font-black text-slate-900 dark:text-white">WhatsApp +220 3888888</span>
                   </div>
                   <ChevronRight size={18} className="text-slate-300" />
                 </a>
 
-                <a href="mailto:" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
+                <a href="mailto:support@dropoff.gm" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-500/10 text-orange-500 flex items-center justify-center"><Mail size={20} /></div>
                     <span className="font-black text-slate-900 dark:text-white">Send Email</span>

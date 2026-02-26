@@ -100,7 +100,7 @@ export const useDriverMap = (
                 directionsRenderer.current = new google.maps.DirectionsRenderer({
                     map: googleMapInstance.current,
                     suppressMarkers: false,
-                    polylineOptions: { strokeColor: '#10B981', strokeWeight: 6, strokeOpacity: 0.9 }
+                    polylineOptions: { strokeColor: '#00E39A', strokeWeight: 6, strokeOpacity: 0.9 }
                 });
             }
         } catch (error) {

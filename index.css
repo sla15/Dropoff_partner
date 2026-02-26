@@ -9,6 +9,54 @@ body,
 
 :root {
   --partner-green: #00E39A;
+  --partner-green-dark: #00C285;
+  --slate-50: #F8FAFC;
+  --slate-100: #F1F5F9;
+  --slate-200: #E2E8F0;
+  --slate-400: #94A3B8;
+  --slate-500: #64748B;
+  --slate-900: #0F172A;
+  --slate-950: #020617;
+  --zinc-50: #FAFAFA;
+  --zinc-100: #F4F4F5;
+  --zinc-800: #27272A;
+  --zinc-900: #121214;
+  --zinc-950: #0C0C0E;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--slate-50);
+  color: var(--slate-900);
+}
+
+.dark body {
+  background-color: var(--zinc-950);
+  color: var(--zinc-100);
+}
+
+.premium-card {
+  background: white;
+  border-radius: 28px;
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.dark .premium-card {
+  background: var(--zinc-900);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.4);
+}
+
+.premium-button {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 18px;
+}
+
+.premium-button:active {
+  transform: scale(0.96);
 }
 
 @keyframes fall-down {

@@ -10,7 +10,7 @@ export const DriverWalletView: React.FC = () => {
             {/* Total Earnings Card */}
             <div className="mx-6 mt-6 bg-slate-900 dark:bg-zinc-900 rounded-[32px] p-8 shadow-2xl relative overflow-hidden">
                 <div className="relative z-10 text-center">
-                    <p className="text-slate-400 text-[10px] font-black tracking-[0.2em] uppercase mb-2">Total Balance</p>
+                    <p className="text-slate-400 text-[10px] font-black tracking-[0.2em] uppercase mb-2">My Cash</p>
                     <h2 className="text-4xl font-black text-white mb-4 tracking-tighter">D{profile.walletBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}</h2>
                 </div>
 
@@ -38,7 +38,7 @@ export const DriverWalletView: React.FC = () => {
                             <CreditCard size={20} className="text-red-500" />
                         </div>
                         <div>
-                            <h3 className="font-black text-slate-900 dark:text-white text-[15px]">Commission Due</h3>
+                            <h3 className="font-black text-slate-900 dark:text-white text-[15px]">Money to Pay Back</h3>
                             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Limit: D{appSettings?.max_driver_cash_amount?.toFixed(2) || '5,000.00'}</p>
                         </div>
                     </div>
@@ -46,8 +46,8 @@ export const DriverWalletView: React.FC = () => {
                 </div>
 
                 <div className="mt-6 mb-2 flex justify-between text-[10px] font-black uppercase tracking-widest">
-                    <span className="text-red-500">Utilization</span>
-                    <span className="text-slate-400">D{((appSettings?.max_driver_cash_amount || 5000) - profile.commissionDebt).toFixed(2)} remaining</span>
+                    <span className="text-red-500">How much used</span>
+                    <span className="text-slate-400">D{((appSettings?.max_driver_cash_amount || 5000) - profile.commissionDebt).toFixed(2)} left</span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-zinc-800 h-2.5 rounded-full overflow-hidden">
                     <div
@@ -59,9 +59,9 @@ export const DriverWalletView: React.FC = () => {
                 <div className="mt-6 bg-red-50 dark:bg-red-900/10 rounded-2xl p-4 border border-red-100 dark:border-red-900/20 flex gap-4">
                     <AlertTriangle size={20} className="text-red-500 shrink-0" />
                     <div>
-                        <h4 className="text-red-600 dark:text-red-400 text-xs font-black uppercase tracking-wider mb-1">Warning</h4>
+                        <h4 className="text-red-600 dark:text-red-400 text-xs font-black uppercase tracking-wider mb-1">Take Note</h4>
                         <p className="text-red-500/80 text-[11px] font-medium leading-relaxed">
-                            Service will be suspended if debt exceeds D{appSettings?.max_driver_cash_amount || '5,000'}. Clear your dues daily.
+                            You cannot work if your debt passes D{appSettings?.max_driver_cash_amount || '5,000'}. Pay your fees every day.
                         </p>
                     </div>
                 </div>
@@ -76,9 +76,8 @@ export const DriverWalletView: React.FC = () => {
                 </button>
             </div>
 
-            {/* Customer Reviews Section */}
             <div className="px-8 mt-10 mb-6 flex justify-between items-end">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Passenger Reviews</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">What Customers Say</h3>
                 <div className="flex items-center gap-1.5 bg-yellow-400/10 px-3 py-1 rounded-full border border-yellow-400/20">
                     <Star size={12} className="text-yellow-500 fill-current" />
                     <span className="text-yellow-600 dark:text-yellow-400 text-[11px] font-black uppercase tracking-widest">{profile.rating}</span>
@@ -111,7 +110,7 @@ export const DriverWalletView: React.FC = () => {
 
             {/* History */}
             <div className="px-8 mt-10 mb-6 flex justify-between items-end">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Recent Rides</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">My Recent Trips</h3>
                 <button className="text-[#00E39A] text-xs font-black uppercase tracking-widest">View All</button>
             </div>
 

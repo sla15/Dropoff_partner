@@ -13,8 +13,8 @@ export const OnlineOverlay: React.FC<OnlineOverlayProps> = ({ isOnline, handleTo
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xl">
             <div className="w-[85%] max-w-sm bg-[#1C1C1E]/60 backdrop-blur-md rounded-[2.5rem] p-8 text-center shadow-2xl border border-white/5 overflow-hidden">
-                <h2 className="text-2xl font-bold text-white mb-2">Ready to drive?</h2>
-                <p className="text-gray-400 text-sm mb-10">Go online to receive requests.</p>
+                <h2 className="text-2xl font-bold text-white mb-2">Ready to work?</h2>
+                <p className="text-gray-400 text-sm mb-10">Go online to see new work.</p>
                 <button
                     onClick={handleToggleOnline}
                     className="w-20 h-20 mx-auto rounded-full bg-[#1C1C1E] border-2 border-[#00E39A] flex items-center justify-center shadow-[0_0_30px_rgba(0,227,154,0.15)] active:scale-95 transition-all"

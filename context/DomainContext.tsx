@@ -206,37 +206,60 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         loadData();
     }, [loadData]);
 
-    // REAL-TIME ORDER SUBSCRIPTION
+    // REAL-TIME SUBSCRIPTIONS
     useEffect(() => {
         if (!user) return;
 
-        const setupSubscription = async () => {
-            const { data: business } = await supabase.from('businesses').select('id').eq('owner_id', user.id).maybeSingle();
-            if (!business) return;
+        let ordersChannel: any;
+        let productsChannel: any;
+        let categoriesChannel: any;
 
-            const channel = supabase
-                .channel(`merchant_orders_${business.id}`)
+        const setupSubscriptions = async () => {
+            const { data: business } = await supabase.from('businesses').select('id').eq('owner_id', user.id).maybeSingle();
+
+            // 1. Order Subscription (for this business)
+            if (business) {
+                ordersChannel = supabase
+                    .channel(`merchant_orders_${business.id}`)
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'orders',
+                        filter: `business_id=eq.${business.id}`
+                    }, () => loadMerchantOrders(business.id))
+                    .subscribe();
+
+                // 2. Products Subscription (for this business)
+                productsChannel = supabase
+                    .channel(`merchant_products_${business.id}`)
+                    .on('postgres_changes', {
+                        event: '*',
+                        schema: 'public',
+                        table: 'products',
+                        filter: `business_id=eq.${business.id}`
+                    }, () => loadProducts(business.id))
+                    .subscribe();
+            }
+
+            // 3. Global Business Categories Subscription
+            categoriesChannel = supabase
+                .channel('public:business_categories')
                 .on('postgres_changes', {
                     event: '*',
                     schema: 'public',
-                    table: 'orders',
-                    filter: `business_id=eq.${business.id}`
-                }, (payload) => {
-                    console.log('Real-time Order Update:', payload);
-                    loadMerchantOrders(business.id);
-                })
+                    table: 'business_categories'
+                }, () => loadData()) // loadData refreshes everything including transactions/categories
                 .subscribe();
-
-            return channel;
         };
 
-        let channel: any;
-        setupSubscription().then(c => channel = c);
+        setupSubscriptions();
 
         return () => {
-            if (channel) supabase.removeChannel(channel);
+            if (ordersChannel) supabase.removeChannel(ordersChannel);
+            if (productsChannel) supabase.removeChannel(productsChannel);
+            if (categoriesChannel) supabase.removeChannel(categoriesChannel);
         };
-    }, [user, loadMerchantOrders]);
+    }, [user, loadMerchantOrders, loadProducts, loadData]);
 
 
     const createDeliveryRequest = async (orderId: string) => {
@@ -262,32 +285,14 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // 3. Calculate Total Cash Upfront (sum of order item totals)
             const totalCashUpfront = batchOrders?.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0) || parseFloat(order.total_amount);
 
-            // 4. Collect all pickup stops (unique business addresses)
+            // 4. Collect all pickup stops (unique business items)
+            // We use business_id to ensure D10 surcharge is applied per distinct business stop
+            const uniqueBusinessIds = Array.from(new Set(batchOrders?.map(o => o.business_id).filter(Boolean)));
             const stops = Array.from(new Set(batchOrders?.map(o => o.businesses?.location_address).filter(Boolean))) as string[];
 
             // 5. Fetch Settings for Fee
             const { data: settings } = await supabase.from('app_settings').select('*').limit(1).single();
 
-            // 6. Check if a ride already exists for this batch
-            const { data: existingRide } = await supabase
-                .from('rides')
-                .select('*')
-                .eq('batch_id', batchId)
-                .neq('status', 'completed')
-                .neq('status', 'cancelled')
-                .maybeSingle();
-
-            if (existingRide) {
-                // Update existing ride with new stops and cash total
-                await supabase.from('rides').update({
-                    stops,
-                    total_cash_upfront: totalCashUpfront,
-                }).eq('id', existingRide.id);
-                return true;
-            }
-
-            // 7. If no existing ride, create a new one
-            // Calculate distance for the primary order (first stop)
             const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
                 const R = 6371;
                 const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -308,8 +313,48 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const minFee = parseFloat(settings?.min_delivery_fee || '100');
             const ratePerKm = parseFloat(settings?.price_per_km || '12');
             const multiplier = parseFloat(settings?.multiplier_scooter || '0.7');
-            const finalPrice = Math.max(minFee, Math.round(distance * ratePerKm * multiplier));
 
+            // Base price based on distance
+            const basePrice = Math.max(minFee, Math.round(distance * ratePerKm * multiplier));
+
+            // Multi-stop surcharge: D10 for every additional stop beyond the first
+            const stopSurcharge = Math.max(0, (uniqueBusinessIds.length - 1) * 10);
+            const finalPrice = basePrice + stopSurcharge;
+
+            // 6. Check if a ride already exists for this batch
+            const { data: existingRide } = await supabase
+                .from('rides')
+                .select('*')
+                .eq('batch_id', batchId)
+                .neq('status', 'completed')
+                .neq('status', 'cancelled')
+                .maybeSingle();
+
+            if (existingRide) {
+                // Update existing ride with new stops, cash total, and updated price
+                const { error: updateErr } = await supabase.from('rides').update({
+                    stops,
+                    total_cash_upfront: totalCashUpfront,
+                    price: finalPrice
+                }).eq('id', existingRide.id);
+
+                if (updateErr) throw updateErr;
+
+                // 6b. If ride is already accepted, notify the driver
+                if (existingRide.driver_id && ['accepted', 'arrived', 'in-progress'].includes(existingRide.status)) {
+                    await supabase.functions.invoke('send-fcm-notification', {
+                        body: {
+                            userIds: [existingRide.driver_id],
+                            title: "New Delivery Added!",
+                            message: `Another shop in your batch is ready. Total cash needed: D${totalCashUpfront}`,
+                            data: { type: 'batch_update', ride_id: existingRide.id }
+                        }
+                    });
+                }
+                return true;
+            }
+
+            // 7. If no existing ride, create a new one
             const { error: rideErr } = await supabase.from('rides').insert({
                 customer_id: order.customer_id,
                 batch_id: batchId,

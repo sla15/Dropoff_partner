@@ -28,8 +28,8 @@ export const DriverHome: React.FC = () => {
         rideStatus,
         setRideStatus,
         user,
-        incomingRide,
-        setIncomingRide,
+        incomingRides,
+        setIncomingRides,
         appSettings,
         isLocked,
         rejectedRideIds,
@@ -43,7 +43,7 @@ export const DriverHome: React.FC = () => {
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [hasCollectedPayment, setHasCollectedPayment] = useState(false);
     const [userRating, setUserRating] = useState(0);
-    const [countdown, setCountdown] = useState(15);
+    const [countdown, setCountdown] = useState(20);
     const [showDirections, setShowDirections] = useState(false);
     const [navigationInfo, setNavigationInfo] = useState({ distance: '...', duration: '...' });
     const [isFollowing, setIsFollowing] = useState(true);
@@ -74,6 +74,7 @@ export const DriverHome: React.FC = () => {
         handleCollectPayment,
         submitRating,
         handleSkipRating,
+        handleDeclineRide,
         notifyCustomer
     } = useRideLifecycle(
         user,
@@ -82,8 +83,8 @@ export const DriverHome: React.FC = () => {
         setCurrentRide,
         rideStatus,
         setRideStatus,
-        incomingRide,
-        setIncomingRide,
+        incomingRides,
+        setIncomingRides,
         rejectedRideIds,
         setRejectedRideIds,
         pushNotification,
@@ -105,7 +106,7 @@ export const DriverHome: React.FC = () => {
         setCurrentRide,
         rideStatus,
         setRideStatus,
-        setIncomingRide,
+        setIncomingRides,
         handleCompleteRide
     );
 
@@ -192,13 +193,7 @@ export const DriverHome: React.FC = () => {
                     rideStatus={rideStatus}
                     isDrawerExpanded={isDrawerExpanded}
                     toggleDrawer={toggleDrawer}
-                    onAccept={handleAcceptRide}
-                    onDecline={() => {
-                        setRejectedRideIds((prev: Set<string>) => new Set(prev).add(currentRide.id));
-                        setCurrentRide(null);
-                        setIncomingRide(null);
-                        setRideStatus('IDLE');
-                    }}
+                    onDecline={handleDeclineRide}
                     onCancel={async () => {
                         if (!currentRide) return;
                         const originalStatus = rideStatus;
@@ -245,7 +240,7 @@ export const DriverHome: React.FC = () => {
                         notifyCustomer('Ride Cancelled', 'Driver had to cancel.');
                         pushNotification('Trip Cancelled', 'Status changed to cancelled.', 'SYSTEM');
                         setCurrentRide(null);
-                        setIncomingRide(null);
+                        setIncomingRides([]);
                         setRideStatus('IDLE');
                         if (directionsRenderer.current) directionsRenderer.current.setDirections({ routes: [] });
                         setIsDrawerExpanded(false);
@@ -257,6 +252,9 @@ export const DriverHome: React.FC = () => {
                     onCollectPayment={handleCollectPayment}
                     countdown={countdown}
                     rideType={currentRide.type as any}
+                    queueCount={incomingRides.length}
+                    currentLat={profile.currentLat}
+                    currentLng={profile.currentLng}
                 />
             )}
         </div>

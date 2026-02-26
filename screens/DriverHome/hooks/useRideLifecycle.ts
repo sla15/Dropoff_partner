@@ -9,8 +9,8 @@ export const useRideLifecycle = (
     setCurrentRide: (ride: any) => void,
     rideStatus: string,
     setRideStatus: (status: string) => void,
-    incomingRide: any,
-    setIncomingRide: (ride: any) => void,
+    incomingRides: any[],
+    setIncomingRides: (rides: any[]) => void,
     rejectedRideIds: Set<string>,
     setRejectedRideIds: (ids: any) => void,
     pushNotification: any,
@@ -65,8 +65,19 @@ export const useRideLifecycle = (
             setRideStatus('RINGING');
             return;
         }
+
+        // REJECT ALL OTHER PENDING REQUESTS IN QUEUE
+        const otherRideIds = incomingRides.filter(r => r.id !== currentRide.id).map(r => r.id);
+        if (otherRideIds.length > 0) {
+            setRejectedRideIds((prev: Set<string>) => {
+                const newSet = new Set(prev);
+                otherRideIds.forEach(id => newSet.add(id));
+                return newSet;
+            });
+        }
+
         pushNotification('Ride Accepted', `Navigating to pickup`, 'SYSTEM');
-        setIncomingRide(null);
+        setIncomingRides([]); // Clear the queue since we accepted one
     };
 
     const handleArrivedAtPickup = async () => {
@@ -141,7 +152,7 @@ export const useRideLifecycle = (
             }
         }
         setCurrentRide(null);
-        setIncomingRide(null);
+        setIncomingRides([]);
         setRideStatus('IDLE');
         setIsDrawerExpanded(false);
         setShowRatingModal(false);
@@ -151,7 +162,7 @@ export const useRideLifecycle = (
 
     const handleSkipRating = () => {
         setCurrentRide(null);
-        setIncomingRide(null);
+        setIncomingRides([]);
         setRideStatus('IDLE');
         setIsDrawerExpanded(false);
         setShowRatingModal(false);
@@ -159,17 +170,43 @@ export const useRideLifecycle = (
         setUserRating(0);
     };
 
+    // NEW: Handle declining a single ride from the stack
+    const handleDeclineRide = () => {
+        if (!currentRide) return;
+
+        setRejectedRideIds((prev: Set<string>) => new Set(prev).add(currentRide.id));
+
+        // Remove from local queue
+        const remaining = incomingRides.filter(r => r.id !== currentRide.id);
+        setIncomingRides(remaining);
+
+        if (remaining.length === 0) {
+            setCurrentRide(null);
+            setRideStatus('IDLE');
+        } else {
+            // Show the NEXT one in queue (FIFO - oldest first)
+            const nextRide = remaining[0];
+            setCurrentRide(nextRide);
+            setRideStatus('RINGING');
+            setCountdown(20);
+        }
+    };
+
     const handleCollectPayment = () => setShowRatingModal(true);
 
     // Effects
     useEffect(() => {
-        if (incomingRide && !currentRide && !rejectedRideIds.has(incomingRide.id)) {
-            setCurrentRide(incomingRide);
-            setRideStatus('RINGING');
-            setCountdown(15);
-            pushNotification('New Request Received!', 'A user needs assistance nearby.', 'RIDE');
+        // If we have incoming rides and no active ride, take the first one (oldest)
+        if (incomingRides.length > 0 && !currentRide) {
+            const oldestRide = incomingRides[0];
+            if (!rejectedRideIds.has(oldestRide.id)) {
+                setCurrentRide(oldestRide);
+                setRideStatus('RINGING');
+                setCountdown(20);
+                pushNotification('New Request Received!', 'A user needs assistance nearby.', 'RIDE');
+            }
         }
-    }, [incomingRide, currentRide, rejectedRideIds]);
+    }, [incomingRides, currentRide, rejectedRideIds]);
 
     useEffect(() => {
         if (!currentRide) return;
@@ -194,7 +231,7 @@ export const useRideLifecycle = (
     }, [currentRide]);
 
     useEffect(() => {
-        if (rideStatus === 'NAVIGATING' && currentRide?.dropoff_lat && currentRide?.dropoff_lng && profile.currentLat && profile.currentLng) {
+        if (rideStatus === 'NAVIGATING' && currentRide?.type === 'PASSENGER' && currentRide?.dropoff_lat && currentRide?.dropoff_lng && profile.currentLat && profile.currentLng) {
             const dist = calculateDistance(profile.currentLat, profile.currentLng, currentRide.dropoff_lat, currentRide.dropoff_lng);
             if (dist < 0.2) handleCompleteRide(true);
         }
@@ -206,9 +243,8 @@ export const useRideLifecycle = (
                 setCountdown(prev => {
                     if (prev <= 1) {
                         clearInterval(ringingInterval.current);
-                        setCurrentRide(null);
-                        setIncomingRide(null);
-                        setRideStatus('IDLE');
+                        // Timeout: Remove this ride and try next
+                        handleDeclineRide();
                         return 0;
                     }
                     return prev - 1;
@@ -228,6 +264,7 @@ export const useRideLifecycle = (
         handleCollectPayment,
         submitRating,
         handleSkipRating,
+        handleDeclineRide,
         notifyCustomer
     };
 };

@@ -26,8 +26,8 @@ interface ProfileContextType {
     updateActiveRole: (newRole: Role) => Promise<void>;
     rideStats: { completed: number };
     orderStats: { count: number; revenue: number };
-    incomingRide: RideRequest | null;
-    setIncomingRide: (ride: RideRequest | null) => void;
+    incomingRides: RideRequest[];
+    setIncomingRides: React.Dispatch<React.SetStateAction<RideRequest[]>>;
     appSettings: {
         commission_percentage: number;
         max_driver_cash_amount: number;
@@ -56,7 +56,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [secondaryOnboardingRole, setSecondaryOnboardingRole] = useState<Role | null>(null);
     const [rideStats, setRideStats] = useState({ completed: 0 });
     const [orderStats, setOrderStats] = useState({ count: 0, revenue: 0 });
-    const [incomingRide, setIncomingRide] = useState<RideRequest | null>(null);
+    const [incomingRides, setIncomingRides] = useState<RideRequest[]>([]);
     const [rejectedRideIds, setRejectedRideIds] = useState<Set<string>>(new Set());
 
     const [appSettings, setAppSettings] = useState({
@@ -194,8 +194,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     businessName: merchantData.name,
                     category: merchantData.category || 'Restaurant',
                     logo: merchantData.image_url || '',
-                    workingHours: { start: '09:00', end: '21:00' },
-                    workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+                    workingHours: merchantData.working_hours || { start: '09:00', end: '21:00' },
+                    workingDays: merchantData.working_days || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
                     phone: profileData.phone || '',
                     eWallet: 'Wave',
                     subCategories: merchantData.sub_categories || [],
@@ -264,7 +264,33 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     .eq('id', activeRide.customer_id)
                     .single();
 
-                setIncomingRide({
+                let merchants: any[] = [];
+                if (activeRide.batch_id) {
+                    const { data: batchOrders } = await supabase
+                        .from('orders')
+                        .select('total_amount, business_id, businesses(name, business_phone, location_address)')
+                        .eq('batch_id', activeRide.batch_id)
+                        .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
+
+                    if (batchOrders) {
+                        const mGrouped: Record<string, any> = {};
+                        batchOrders.forEach(bo => {
+                            const b = bo.businesses as any;
+                            if (!mGrouped[bo.business_id]) {
+                                mGrouped[bo.business_id] = {
+                                    name: b?.name || 'Shop',
+                                    phone: b?.business_phone || '',
+                                    address: b?.location_address || '',
+                                    amount: 0
+                                };
+                            }
+                            mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
+                        });
+                        merchants = Object.values(mGrouped);
+                    }
+                }
+
+                const newRideObj = {
                     id: activeRide.id,
                     customer_id: activeRide.customer_id,
                     passengerName: userData?.full_name || 'Customer',
@@ -281,8 +307,19 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     pickup_lng: activeRide.pickup_lng,
                     dropoff_lat: activeRide.dropoff_lat,
                     dropoff_lng: activeRide.dropoff_lng,
-                    type: activeRide.type
-                } as any);
+                    type: activeRide.type,
+                    created_at: activeRide.created_at,
+                    total_cash_upfront: activeRide.total_cash_upfront,
+                    stops: activeRide.stops,
+                    merchants: merchants,
+                    merchantPhone: merchants[0]?.phone,
+                    businessName: merchants[0]?.name
+                } as any;
+
+                setIncomingRides(prev => {
+                    if (prev.some(r => r.id === newRideObj.id)) return prev;
+                    return [...prev, newRideObj];
+                });
             }
         } catch (err) {
             console.error("Error fetching active ride:", err);
@@ -397,8 +434,50 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 // Ignore updates if a manual toggle was performed in the last 2 seconds (prevents flicker)
                 if (Date.now() - lastToggleTime.current < 2000) return;
 
-                if (newData && typeof newData.is_online === 'boolean') {
-                    setProfile(prev => ({ ...prev, isOnline: newData.is_online }));
+                if (newData) {
+                    setProfile(prev => ({
+                        ...prev,
+                        isOnline: typeof newData.is_online === 'boolean' ? newData.is_online : prev.isOnline,
+                        commissionDebt: typeof newData.commission_debt === 'number' ? newData.commission_debt : prev.commissionDebt,
+                        isSuspended: typeof newData.is_suspended === 'boolean' ? newData.is_suspended : prev.isSuspended
+                    }));
+                }
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, role]);
+
+    // Real-time Business Sync (for Merchants)
+    useEffect(() => {
+        if (!user || (role !== 'MERCHANT' && role !== 'BOTH')) return;
+
+        const channel = supabase
+            .channel('public:businesses_sync')
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'businesses',
+                filter: `owner_id=eq.${user.id}`
+            }, (payload) => {
+                const newData = payload.new;
+                if (newData) {
+                    setProfile(prev => ({
+                        ...prev,
+                        business: {
+                            ...prev.business!,
+                            businessName: newData.name,
+                            category: newData.category,
+                            address: newData.location_address,
+                            logo: newData.image_url,
+                            lat: newData.lat,
+                            lng: newData.lng,
+                            paymentPhone: newData.payment_phone,
+                            subCategories: newData.sub_categories || []
+                        }
+                    }));
                 }
             })
             .subscribe();
@@ -460,12 +539,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }, (payload) => {
                 const updatedRide = payload.new;
                 // If the updated ride is our current incoming ride and is no longer searching, clear it
-                setIncomingRide(prev => {
-                    if (prev && prev.id === updatedRide.id && updatedRide.status !== 'searching') {
-                        return null;
-                    }
-                    return prev;
-                });
+                // If the updated ride is no longer searching, remove it from the queue
+                setIncomingRides(prev => prev.filter(r => r.id !== updatedRide.id || updatedRide.status === 'searching'));
             })
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
@@ -549,7 +624,33 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             .eq('id', newRide.customer_id)
                             .single();
 
-                        setIncomingRide({
+                        let merchants: any[] = [];
+                        if (newRide.batch_id) {
+                            const { data: batchOrders } = await supabase
+                                .from('orders')
+                                .select('total_amount, business_id, businesses(name, business_phone, location_address)')
+                                .eq('batch_id', newRide.batch_id)
+                                .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
+
+                            if (batchOrders) {
+                                const mGrouped: Record<string, any> = {};
+                                batchOrders.forEach(bo => {
+                                    const b = bo.businesses as any;
+                                    if (!mGrouped[bo.business_id]) {
+                                        mGrouped[bo.business_id] = {
+                                            name: b?.name || 'Shop',
+                                            phone: b?.business_phone || '',
+                                            address: b?.location_address || '',
+                                            amount: 0
+                                        };
+                                    }
+                                    mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
+                                });
+                                merchants = Object.values(mGrouped);
+                            }
+                        }
+
+                        const rideToAdd = {
                             id: newRide.id,
                             customer_id: newRide.customer_id,
                             passengerName: userData?.full_name || 'New Request',
@@ -557,15 +658,27 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             passengerImage: userData?.avatar_url,
                             passengerRating: userData?.average_rating || 5.0,
                             rating: userData?.average_rating || 5.0,
-                            rideCount: 124, // Keep as placeholder for now unless there's a ride_count column
+                            rideCount: 124,
                             pickupDistance: `${distance.toFixed(1)} km`,
                             destination: newRide.dropoff_address,
                             price: parseFloat(newRide.price),
                             pickupLocation: newRide.pickup_address,
                             pickup_lat: newRide.pickup_lat,
                             pickup_lng: newRide.pickup_lng,
-                            type: newRide.type
-                        } as any);
+                            type: newRide.type,
+                            created_at: newRide.created_at,
+                            total_cash_upfront: newRide.total_cash_upfront,
+                            stops: newRide.stops,
+                            merchants: merchants,
+                            merchantPhone: merchants[0]?.phone,
+                            businessName: merchants[0]?.name
+                        } as any;
+
+                        setIncomingRides(prev => {
+                            if (prev.some(r => r.id === rideToAdd.id)) return prev;
+                            // Add new rides at the end, but they are shown FIFO in the UI
+                            return [...prev, rideToAdd];
+                        });
                     };
 
                     fetchPassenger();
@@ -744,7 +857,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     lat: targetProfile.business.lat,
                     lng: targetProfile.business.lng,
                     payment_phone: targetProfile.business.paymentPhone,
-                    sub_categories: targetProfile.business.subCategories || []
+                    sub_categories: targetProfile.business.subCategories || [],
+                    working_hours: targetProfile.business.workingHours,
+                    working_days: targetProfile.business.workingDays
                 }).eq('owner_id', user.id);
                 if (businessError) console.error("Business Sync Error:", businessError);
 
@@ -840,7 +955,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             secondaryOnboardingRole, startSecondaryOnboarding: (r) => { setRole(r); setSecondaryOnboardingRole(r); },
             cancelSecondaryOnboarding: () => setSecondaryOnboardingRole(null),
             toggleOnlineStatus, payCommission, signOut, uploadFile, loadUserData, syncProfile, updateActiveRole,
-            rideStats, orderStats, incomingRide, setIncomingRide,
+            rideStats, orderStats, incomingRides, setIncomingRides,
             rejectedRideIds, setRejectedRideIds,
             appSettings,
             isLocked: (profile.commissionDebt > appSettings.max_driver_cash_amount) || profile.isSuspended,
