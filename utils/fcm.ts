@@ -18,21 +18,21 @@ try {
     console.warn("FCM: Messaging not initialized (likely platform restriction)");
 }
 
-export const initFCM = async (userId?: string) => {
+export const initFCM = async (userId?: string, onForegroundMessage?: (title: string, body: string, data?: any) => void) => {
     try {
         console.log("🔔 FCM: Starting initialization for user:", userId || "anonymous");
 
         if (Capacitor.isNativePlatform()) {
-            await initNativePush(userId);
+            await initNativePush(userId, onForegroundMessage);
         } else {
-            await initWebPush(userId);
+            await initWebPush(userId, onForegroundMessage);
         }
     } catch (err) {
         console.error("❌ FCM: Initialization error details:", err);
     }
 };
 
-const initNativePush = async (userId?: string) => {
+const initNativePush = async (userId?: string, onForegroundMessage?: (title: string, body: string, data?: any) => void) => {
     console.log("🔔 FCM: Initializing Native Push (Capacitor)");
 
     let permStatus = await PushNotifications.checkPermissions();
@@ -63,8 +63,9 @@ const initNativePush = async (userId?: string) => {
 
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
         console.log('🔔 FCM: Native notification received:', notification);
-        // Capacitor handles displaying the notification in the tray when in background.
-        // For foreground, we can trigger a sound or UI update.
+        if (onForegroundMessage) {
+            onForegroundMessage(notification.title || 'Notification', notification.body || '', notification.data);
+        }
         if (notification.data?.ride_id || notification.title?.includes('Request')) {
             playNotificationSound();
         }
@@ -75,7 +76,7 @@ const initNativePush = async (userId?: string) => {
     });
 };
 
-const initWebPush = async (userId?: string) => {
+const initWebPush = async (userId?: string, onForegroundMessage?: (title: string, body: string, data?: any) => void) => {
     if (!("Notification" in window)) {
         console.error("❌ FCM: This browser does not support notifications.");
         return;
@@ -100,16 +101,42 @@ const initWebPush = async (userId?: string) => {
 
     onMessage(messaging, (payload) => {
         console.log("🔔 FCM: Web message received in foreground:", payload);
+
+        const title = payload.notification?.title || 'New Notification';
+        const body = payload.notification?.body || '';
+
+        // Trigger sound regardless of UI
+        if (payload.data?.ride_id || title.includes('Request')) {
+            playNotificationSound();
+        }
+
+        // Use callback if provided
+        if (onForegroundMessage) {
+            onForegroundMessage(title, body, payload.data);
+        }
+
         if (payload.notification) {
-            if (payload.data?.ride_id || payload.notification.title?.includes('Request')) {
-                playNotificationSound();
+            try {
+                // Background notifications are handled by the browser/SW
+                // For foreground, we attempt to show a browser notification
+                const notificationTitle = title;
+                const notificationOptions = {
+                    body: body,
+                    icon: '/assets/logo.png',
+                    data: payload.data,
+                    tag: payload.data?.ride_id || 'general' // Prevent duplicates
+                };
+
+                console.log("🔔 FCM: Attempting to show foreground notification:", notificationTitle, notificationOptions);
+                const notification = new Notification(notificationTitle, notificationOptions);
+
+                notification.onclick = () => {
+                    window.focus();
+                    notification.close();
+                };
+            } catch (err) {
+                console.warn("⚠️ FCM: Could not show browser notification in foreground:", err);
             }
-            // Display notification
-            new Notification(payload.notification.title || 'New Notification', {
-                body: payload.notification.body || '',
-                icon: '/assets/logo.png',
-                data: payload.data,
-            });
         }
     });
 };

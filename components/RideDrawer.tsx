@@ -150,12 +150,16 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                             <div className="text-orange-600 dark:text-orange-400 text-2xl font-black">D{currentRide.total_cash_upfront}</div>
                                         </div>
                                     ) : null}
-                                    <div className="flex flex-col items-end opacity-50">
-                                        <div className="flex items-center gap-1.5 text-gray-400">
-                                            <EyeOff size={16} />
-                                            <span className="text-xl font-bold italic tracking-tighter">D ••••</span>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex flex-col items-end">
+                                            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1 opacity-60">Reveal fee at completion</span>
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="bg-gray-100 dark:bg-white/5 w-6 h-6 rounded-lg flex items-center justify-center">
+                                                    <EyeOff size={12} className="text-gray-400" />
+                                                </div>
+                                                <span className="text-xl font-black text-gray-300 dark:text-zinc-600 tracking-tighter">D ••••</span>
+                                            </div>
                                         </div>
-                                        <div className="text-[9px] font-black uppercase tracking-widest mt-1">Reveal Fee at {rideStatus === 'NAVIGATING' ? 'Completion' : 'Arrival'}</div>
                                     </div>
                                 </div>
                             ) : rideStatus === 'COMPLETED' ? (
@@ -178,7 +182,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                     </div>
 
                     {/* Route Visualizer */}
-                    <div className={`relative pl-2 mb-8 transition-all duration-300 ${isNavigating && !isDrawerExpanded ? 'opacity-0 h-0 overflow-hidden mb-0' : 'opacity-100'} ${rideStatus === 'COMPLETED' ? 'opacity-40 grayscale' : ''}`}>
+                    <div className={`relative pl-2 mb-8 transition-all duration-300 ${rideStatus === 'COMPLETED' ? 'opacity-40 grayscale' : ''}`}>
                         <div className="absolute left-[7px] top-3 bottom-8 w-[2px] bg-gray-200 dark:bg-[#2C2C2E]">
                             <div className={`absolute top-0 bottom-0 left-0 right-0 bg-gradient-to-b from-[#00E39A] to-transparent ${isRideStarted ? 'h-full' : 'h-1/2'}`}></div>
                         </div>
@@ -258,7 +262,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                     </div>
 
                     {/* Actions Area */}
-                    <div className={`pb-20 transition-all duration-300 ${isNavigating && !isDrawerExpanded ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100'}`}>
+                    <div className={`pb-20 transition-all duration-300`}>
                         <div className="space-y-4">
                             {/* 1. Contextual Action Stack */}
                             {rideStatus === 'RINGING' && (
@@ -322,21 +326,73 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             )}
 
                             {rideStatus === 'ACCEPTED' && (
-                                <button
-                                    onClick={onCollectPayment}
-                                    className="w-full bg-[#00E39A] text-black h-16 rounded-3xl font-black active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-[0_12px_24px_rgba(0,227,154,0.3)] mb-4 uppercase tracking-widest"
-                                >
-                                    <CheckCircle size={24} /> Get Paid Now
-                                </button>
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={onArrived}
+                                        className="w-full bg-[#00E39A] text-black h-16 rounded-3xl font-black active:scale-[0.98] transition-all flex items-center justify-center gap-3 shadow-[0_12px_24px_rgba(0,227,154,0.3)] mb-2 uppercase tracking-widest"
+                                    >
+                                        <MapPin size={24} /> I Have Arrived
+                                    </button>
+
+                                    {/* Contact Buttons */}
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <a
+                                            href={`tel:${currentRide.passengerPhone}`}
+                                            className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 border border-gray-100 dark:border-white/5 active:scale-95 transition-transform"
+                                        >
+                                            <Phone size={18} fill="currentColor" /> CALL
+                                        </a>
+                                        <a
+                                            href={`sms:${currentRide.passengerPhone}`}
+                                            className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 border border-gray-100 dark:border-white/5 active:scale-95 transition-transform"
+                                        >
+                                            <MessageCircle size={18} fill="currentColor" /> MESSAGE
+                                        </a>
+                                    </div>
+
+                                    <SlideButton
+                                        label="Slide to Cancel Ride"
+                                        description="Emergency cancellation"
+                                        onSlideComplete={onCancel}
+                                        activeColor="#EF4444"
+                                        baseColor="bg-red-50 dark:bg-red-900/10"
+                                    />
+                                </div>
                             )}
 
                             {rideStatus === 'ARRIVED' && (
-                                <button
-                                    onClick={onStartRide}
-                                    className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-beta active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-lg uppercase tracking-widest font-black"
-                                >
-                                    <Play size={22} fill="currentColor" /> START TRIP
-                                </button>
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={onStartRide}
+                                        className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-beta active:scale-95 transition-transform flex items-center justify-center gap-3 shadow-lg uppercase tracking-widest font-black"
+                                    >
+                                        <Play size={22} fill="currentColor" /> START TRIP
+                                    </button>
+
+                                    {/* Contact Buttons */}
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <a
+                                            href={`tel:${currentRide.passengerPhone}`}
+                                            className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 border border-gray-100 dark:border-white/5 active:scale-95 transition-transform"
+                                        >
+                                            <Phone size={18} fill="currentColor" /> CALL
+                                        </a>
+                                        <a
+                                            href={`sms:${currentRide.passengerPhone}`}
+                                            className="bg-white dark:bg-zinc-800 text-gray-900 dark:text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 border border-gray-100 dark:border-white/5 active:scale-95 transition-transform"
+                                        >
+                                            <MessageCircle size={18} fill="currentColor" /> MESSAGE
+                                        </a>
+                                    </div>
+
+                                    <SlideButton
+                                        label="Slide to Cancel Ride"
+                                        description="Emergency cancellation"
+                                        onSlideComplete={onCancel}
+                                        activeColor="#EF4444"
+                                        baseColor="bg-red-50 dark:bg-red-900/10"
+                                    />
+                                </div>
                             )}
 
                             {rideStatus === 'NAVIGATING' && (
@@ -376,82 +432,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     )}
 
                                     <div className="space-y-3">
-                                        {/* Contact Buttons */}
-                                        {rideType === 'DELIVERY' && (
-                                            <div className="bg-gray-50 dark:bg-zinc-800/50 p-4 rounded-3xl border border-gray-100 dark:border-white/5 mb-4">
-                                                <div className="flex flex-col gap-6">
-                                                    {/* Merchants List */}
-                                                    {currentRide.merchants && currentRide.merchants.length > 0 ? (
-                                                        <div className="space-y-6">
-                                                            {currentRide.merchants.map((merchant, mIdx) => (
-                                                                <div key={mIdx} className="border-b border-gray-100 dark:border-white/5 pb-4 last:border-0 last:pb-0">
-                                                                    <div className="flex justify-between items-start mb-2">
-                                                                        <div>
-                                                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Shop {currentRide.merchants!.length > 1 ? mIdx + 1 : ''}:</p>
-                                                                            <p className="text-gray-900 dark:text-white font-bold">{merchant.name}</p>
-                                                                        </div>
-                                                                        <div className="text-right">
-                                                                            <p className="text-[10px] text-orange-500 font-black uppercase tracking-widest">Pickup Amount</p>
-                                                                            <p className="text-orange-600 dark:text-orange-400 font-black">D{merchant.amount}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-2 gap-2">
-                                                                        <a href={`tel:${merchant.phone}`} className="bg-white dark:bg-zinc-800 h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border border-blue-100 dark:border-blue-900/30 text-blue-600 dark:text-blue-400">
-                                                                            <Phone size={12} fill="currentColor" /> Call Shop
-                                                                        </a>
-                                                                        <a href={`https://wa.me/${merchant.phone.replace('+', '')}`} className="bg-white dark:bg-zinc-800 h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border border-green-100 dark:border-green-900/30 text-green-600 dark:text-green-400">
-                                                                            <MessageCircle size={12} fill="currentColor" /> WhatsApp
-                                                                        </a>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    ) : currentRide.merchantPhone ? (
-                                                        <div>
-                                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Shop: {currentRide.businessName || 'Merchant'}</p>
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                <a href={`tel:${currentRide.merchantPhone}`} className="bg-white dark:bg-zinc-800 h-11 rounded-xl font-bold flex items-center justify-center gap-2 border border-blue-100 dark:border-blue-900/30 text-blue-600 dark:text-blue-400">
-                                                                    <Phone size={14} fill="currentColor" /> Call Shop
-                                                                </a>
-                                                                <a href={`https://wa.me/${currentRide.merchantPhone.replace('+', '')}`} className="bg-white dark:bg-zinc-800 h-11 rounded-xl font-bold flex items-center justify-center gap-2 border border-green-100 dark:border-green-900/30 text-green-600 dark:text-green-400">
-                                                                    <MessageCircle size={14} fill="currentColor" /> WhatsApp
-                                                                </a>
-                                                            </div>
-                                                        </div>
-                                                    ) : null}
-
-                                                    {/* Customer Info */}
-                                                    <div className="pt-2 border-t border-dashed border-gray-200 dark:border-gray-700">
-                                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-2">Customer: {currentRide.passengerName}</p>
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <a href={`tel:${currentRide.passengerPhone}`} className="bg-white dark:bg-zinc-800 h-11 rounded-xl font-bold flex items-center justify-center gap-2 border border-[#00E39A]/20 text-[#00E39A]">
-                                                                <Phone size={14} fill="currentColor" /> Call Customer
-                                                            </a>
-                                                            <a href={`sms:${currentRide.passengerPhone}`} className="bg-white dark:bg-zinc-800 h-11 rounded-xl font-bold flex items-center justify-center gap-2 border border-blue-100 dark:border-blue-900/30 text-blue-500">
-                                                                <MessageCircle size={14} fill="currentColor" /> Message
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {rideType === 'PASSENGER' && (
-                                            <div className="grid grid-cols-2 gap-3">
-                                                <a
-                                                    href={`tel:${currentRide.passengerPhone}`}
-                                                    className="bg-[#00E39A] text-black h-14 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform border border-[#00E39A]/20"
-                                                >
-                                                    <Phone size={18} fill="currentColor" /> CALL
-                                                </a>
-                                                <a
-                                                    href={`sms:${currentRide.passengerPhone}`}
-                                                    className="bg-blue-500 text-white h-14 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform border border-blue-400/20"
-                                                >
-                                                    <MessageCircle size={18} fill="currentColor" /> MESSAGE
-                                                </a>
-                                            </div>
-                                        )}
+                                        {/* Contact Buttons Removed from NAVIGATING state per user request */}
                                     </div>
 
                                     <SlideButton

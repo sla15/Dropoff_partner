@@ -21,6 +21,7 @@ export const useRideLifecycle = (
     setIsDrawerExpanded: (val: boolean) => void,
     appSettings: any,
     syncProfile: () => Promise<void>,
+    countdown: number,
     setCountdown: (val: any) => void,
     calculateDistance: (lat1: number, lon1: number, lat2: number, lon2: number) => number
 ) => {
@@ -201,9 +202,23 @@ export const useRideLifecycle = (
             const oldestRide = incomingRides[0];
             if (!rejectedRideIds.has(oldestRide.id)) {
                 setCurrentRide(oldestRide);
-                setRideStatus('RINGING');
-                setCountdown(20);
-                pushNotification('New Request Received!', 'A user needs assistance nearby.', 'RIDE');
+
+                // RESTORE STATUS FROM DATABASE IF AVAILABLE
+                const dbStatus = oldestRide.status || oldestRide.dbStatus;
+                if (dbStatus === 'accepted') {
+                    setRideStatus('ACCEPTED');
+                    pushNotification('Active Ride Found', 'Continuing your journey to pickup.', 'SYSTEM');
+                } else if (dbStatus === 'arrived') {
+                    setRideStatus('ARRIVED');
+                    pushNotification('Active Ride Found', 'You are currently at the pickup.', 'SYSTEM');
+                } else if (dbStatus === 'in-progress') {
+                    setRideStatus('NAVIGATING');
+                    pushNotification('Active Trip Found', 'Continuing your trip.', 'SYSTEM');
+                } else {
+                    setRideStatus('RINGING');
+                    setCountdown(20);
+                    pushNotification('New Request Received!', 'A user needs assistance nearby.', 'RIDE');
+                }
             }
         }
     }, [incomingRides, currentRide, rejectedRideIds]);
@@ -233,7 +248,7 @@ export const useRideLifecycle = (
     useEffect(() => {
         if (rideStatus === 'NAVIGATING' && currentRide?.type === 'PASSENGER' && currentRide?.dropoff_lat && currentRide?.dropoff_lng && profile.currentLat && profile.currentLng) {
             const dist = calculateDistance(profile.currentLat, profile.currentLng, currentRide.dropoff_lat, currentRide.dropoff_lng);
-            if (dist < 0.2) handleCompleteRide(true);
+            if (dist < 0.05) handleCompleteRide(true);
         }
     }, [profile.currentLat, profile.currentLng, rideStatus, currentRide]);
 
@@ -242,9 +257,6 @@ export const useRideLifecycle = (
             ringingInterval.current = setInterval(() => {
                 setCountdown(prev => {
                     if (prev <= 1) {
-                        clearInterval(ringingInterval.current);
-                        // Timeout: Remove this ride and try next
-                        handleDeclineRide();
                         return 0;
                     }
                     return prev - 1;
@@ -255,6 +267,16 @@ export const useRideLifecycle = (
         }
         return () => { if (ringingInterval.current) clearInterval(ringingInterval.current); };
     }, [rideStatus]);
+
+    // Handle timeout outside of the setState callback to prevent render warnings
+    useEffect(() => {
+        if (rideStatus === 'RINGING' && countdown === 0) {
+            if (ringingInterval.current) clearInterval(ringingInterval.current);
+            handleDeclineRide();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [countdown, rideStatus]);
+
 
     return {
         handleAcceptRide,

@@ -298,11 +298,24 @@ export const useDriverMap = (
 
         const google = (window as any).google;
         const origin = { lat: profile.currentLat, lng: profile.currentLng };
-        const destination = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
-            { lat: currentRide.dropoff_lat, lng: currentRide.dropoff_lng } :
-            { lat: currentRide.pickup_lat, lng: currentRide.pickup_lng };
 
-        if (!destination.lat || !destination.lng) return;
+        // If arrived or navigating, destination is dropoff
+        // If accepted but not arrived, destination is pickup
+        const destLat = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
+            (currentRide.dropoff_lat ?? currentRide.pickup_lat) : currentRide.pickup_lat;
+        const destLng = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
+            (currentRide.dropoff_lng ?? currentRide.pickup_lng) : currentRide.pickup_lng;
+
+        const destination = { lat: destLat, lng: destLng };
+
+        if (!destination.lat || !destination.lng) {
+            console.warn("🗺️ Map: Skipping directions - destination coords are missing/null", {
+                status: rideStatus,
+                destination,
+                rideId: currentRide.id
+            });
+            return;
+        }
 
         directionsService.current.route({
             origin,
@@ -312,12 +325,15 @@ export const useDriverMap = (
             unitSystem: google.maps.UnitSystem.METRIC,
         }, (result: any, status: any) => {
             if (status === 'OK') {
+                console.log("🗺️ Map: Directions result OK");
                 directionsRenderer.current.setDirections(result);
                 const leg = result.routes[0].legs[0];
                 setNavigationInfo({
                     distance: leg.distance.text,
                     duration: leg.duration.text
                 });
+            } else {
+                console.error("🗺️ Map: Directions request failed", status);
             }
         });
     }, [rideStatus, currentRide?.id, profile.currentLat, profile.currentLng]);

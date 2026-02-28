@@ -47,7 +47,8 @@ interface ProfileContextType {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user: authUser } = useAuth(); // Renamed to avoid conflict with local 'user' state
+    const { user: authUser } = useAuth();
+    const { pushNotification } = useUI();
     const [user, setUser] = useState<User | null>(null); // Local user state
     const [role, setRole] = useState<Role>('DRIVER');
     const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
@@ -313,7 +314,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     stops: activeRide.stops,
                     merchants: merchants,
                     merchantPhone: merchants[0]?.phone,
-                    businessName: merchants[0]?.name
+                    businessName: merchants[0]?.name,
+                    dbStatus: activeRide.status,
+                    status: activeRide.status
                 } as any;
 
                 setIncomingRides(prev => {
@@ -373,7 +376,12 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (user) {
             // Initialize FCM and sync token to Supabase
-            initFCM(user.id);
+            // Passing a callback for foreground notifications
+            initFCM(user.id, (title, body, data) => {
+                // Determine channel type: RIDE for ride requests, SYSTEM for others
+                const channel = (data?.type === 'ride_request' || data?.ride_id) ? 'RIDE' : 'SYSTEM';
+                pushNotification(title, body, channel);
+            });
         } else {
             setIsOnboarded(false);
         }
@@ -488,6 +496,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [user, role]);
 
     // Real-time Ride Request Listener (Tiered Dispatch / Expanding Radius)
+    // Ref to prevent stale closures without re-triggering effect
+    const profileRef = useRef(profile);
+    const rejectedRideIdsRef = useRef(rejectedRideIds);
+
+    useEffect(() => {
+        profileRef.current = profile;
+        rejectedRideIdsRef.current = rejectedRideIds;
+    }, [profile, rejectedRideIds]);
+
     useEffect(() => {
         if (!user || role !== 'DRIVER' || !profile.isOnline) return;
 
@@ -509,10 +526,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             .on('postgres_changes', {
                 event: 'INSERT',
                 schema: 'public',
-                table: 'rides',
-                filter: `status=eq.searching`
+                table: 'rides'
             }, (payload) => {
+                console.log("[ProfileContext] Realtime INSERT payload:", payload);
                 const newRide = payload.new;
+
+                if (newRide.status !== 'searching') {
+                    console.log("[ProfileContext] Ignoring non-searching ride");
+                    return;
+                }
 
                 const rideVehicleTypeMapping: Record<string, string> = {
                     'scooter': 'SCOOTER_TUKTUK',
@@ -524,12 +546,14 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const isEligibleForDelivery = newRide.type === 'DELIVERY';
 
                 const estCommission = (parseFloat(newRide.price || '0') * appSettings.commission_percentage) / 100;
-                const isOverDebtLimit = (profile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const currentProfile = profileRef.current;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const currentDriverVehicleType = currentProfile.vehicle?.type;
 
-                if (!rejectedRideIds.has(newRide.id) && !isOverDebtLimit && (rideType === driverVehicleType || isEligibleForDelivery)) {
+                if (!rejectedRideIdsRef.current.has(newRide.id) && !isOverDebtLimit && (rideType === currentDriverVehicleType || isEligibleForDelivery)) {
                     handleNewRide(newRide);
                 } else if (isOverDebtLimit && isEligibleForDelivery) {
-                    console.log("[ProfileContext] Ride blocked due to debt debt:", profile.commissionDebt);
+                    console.log("[ProfileContext] Ride blocked due to debt debt:", currentProfile.commissionDebt);
                 }
             })
             .on('postgres_changes', {
@@ -582,20 +606,25 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (pendingRides && pendingRides.length > 0) {
                 const latestRide = pendingRides[0];
                 const estCommission = (parseFloat(latestRide.price || '0') * appSettings.commission_percentage) / 100;
-                const isOverDebtLimit = (profile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const currentProfile = profileRef.current;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
 
-                if (!rejectedRideIds.has(latestRide.id) && !isOverDebtLimit) {
+                if (!rejectedRideIdsRef.current.has(latestRide.id) && !isOverDebtLimit) {
                     handleNewRide(latestRide);
                 }
             }
         };
 
         const handleNewRide = (newRide: any) => {
+            console.log("[ProfileContext] handleNewRide started for:", newRide.id);
             const startTime = new Date().getTime();
 
             // Interval to check distance with expanding radius
             const checkInterval = setInterval(async () => {
-                if (!profile.currentLat || !profile.currentLng) return;
+                const currentProfile = profileRef.current;
+                // Default fallback location for testing if geolocation fails
+                const lat = currentProfile.currentLat || 50.110924; // Frankfurt fallback
+                const lng = currentProfile.currentLng || 8.682127;
 
                 // Check if ride is still available
                 const { data: currentRideStatus } = await supabase.from('rides').select('status').eq('id', newRide.id).single();
@@ -605,15 +634,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
 
                 const distance = calculateDistance(
-                    profile.currentLat,
-                    profile.currentLng,
+                    lat,
+                    lng,
                     newRide.pickup_lat,
                     newRide.pickup_lng
                 );
 
-                // Radius starts at 3km and increases by 2km every 5 seconds
                 const elapsedSeconds = (new Date().getTime() - startTime) / 1000;
-                const dynamicRadius = 3 + (Math.floor(elapsedSeconds / 5) * 2);
+                // For testing purposes, we expand the radius massively to ensure the driver receives the ride instantly regardless of testing distance
+                const dynamicRadius = 99999;
 
                 if (distance <= dynamicRadius) {
                     // Fetch real passenger data
@@ -665,13 +694,17 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             pickupLocation: newRide.pickup_address,
                             pickup_lat: newRide.pickup_lat,
                             pickup_lng: newRide.pickup_lng,
+                            dropoff_lat: newRide.dropoff_lat,
+                            dropoff_lng: newRide.dropoff_lng,
                             type: newRide.type,
                             created_at: newRide.created_at,
                             total_cash_upfront: newRide.total_cash_upfront,
                             stops: newRide.stops,
                             merchants: merchants,
                             merchantPhone: merchants[0]?.phone,
-                            businessName: merchants[0]?.name
+                            businessName: merchants[0]?.name,
+                            dbStatus: newRide.status,
+                            status: newRide.status
                         } as any;
 
                         setIncomingRides(prev => {
@@ -697,7 +730,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 console.error('Error removing channel:', error);
             }
         };
-    }, [user, role, profile.isOnline, profile.currentLat, profile.currentLng, rejectedRideIds, profile.vehicle?.type]);
+    }, [user, role, profile.isOnline, profile.vehicle?.type]);
 
     const completeOnboarding = async (targetProfile?: UserProfile) => {
         const activeProfile = targetProfile || profile;

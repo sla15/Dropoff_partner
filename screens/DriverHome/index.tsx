@@ -95,6 +95,7 @@ export const DriverHome: React.FC = () => {
         setIsDrawerExpanded,
         appSettings,
         syncProfile,
+        countdown,
         setCountdown,
         calculateDistance
     );
