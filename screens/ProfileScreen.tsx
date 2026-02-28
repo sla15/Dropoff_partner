@@ -10,7 +10,7 @@ import { ProfileMerchantView } from './ProfileMerchantView';
 import { Phone, MessageCircle, Mail } from 'lucide-react';
 
 export const ProfileScreen: React.FC = () => {
-  const { role, updateActiveRole, profile, isDarkMode, toggleTheme, pushNotification, startSecondaryOnboarding, setCurrentTab, uploadFile, updateProfile, syncProfile, signOut } = useApp();
+  const { role, updateActiveRole, profile, isDarkMode, toggleTheme, pushNotification, startSecondaryOnboarding, setCurrentTab, uploadFile, updateProfile, syncProfile, signOut, showAlert, requestAccountDeletion } = useApp();
   const [showSupportDrawer, setShowSupportDrawer] = React.useState(false);
 
   const handleRoleSwitch = (targetRole: Role) => {
@@ -174,7 +174,26 @@ export const ProfileScreen: React.FC = () => {
             </button>
 
             {/* Delete Account */}
-            <button onClick={handleOpenSupport} className="w-full p-4 flex items-center gap-4 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors text-left group">
+            <button
+              onClick={() => {
+                showAlert(
+                  'Delete Account',
+                  'Are you sure you want to delete your account? This action cannot be undone and will remove your access to the platform.',
+                  async () => {
+                    const { success } = await requestAccountDeletion();
+                    if (success) {
+                      setShowSupportDrawer(true);
+                      pushNotification('Request Submitted', 'Our team will review your deletion request.', 'SYSTEM');
+                    } else {
+                      pushNotification('Error', 'Could not submit deletion request. Please try again.', 'SYSTEM');
+                    }
+                  },
+                  'Request Deletion',
+                  'Cancel'
+                );
+              }}
+              className="w-full p-4 flex items-center gap-4 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors text-left group"
+            >
               <div className="w-10 h-10 rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 flex items-center justify-center group-hover:bg-red-100 dark:group-hover:bg-red-900/30 transition-colors"><Trash2 size={20} /></div>
               <div>
                 <p className="font-bold text-[15px] text-red-500 group-hover:text-red-600">Delete Account</p>

@@ -42,7 +42,8 @@ interface ProfileContextType {
     rejectedRideIds: Set<string>;
     setRejectedRideIds: React.Dispatch<React.SetStateAction<Set<string>>>;
     isLocked: boolean;
-    isLoading: boolean; // NEW: Loading state for initialization
+    isLoading: boolean;
+    requestAccountDeletion: () => Promise<{ success: boolean; error?: string }>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -968,6 +969,25 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    const requestAccountDeletion = async () => {
+        if (!user) return { success: false, error: 'User not authenticated' };
+
+        const timestamp = new Date().toISOString();
+        const { error } = await supabase
+            .from('profiles')
+            .update({ deletion_requested_at: timestamp })
+            .eq('id', user.id);
+
+        if (error) {
+            console.error('Error requesting account deletion:', error);
+            return { success: false, error: error.message };
+        }
+
+        // Locally update profile state
+        setProfile(prev => ({ ...prev, deletion_requested_at: timestamp }));
+        return { success: true };
+    };
+
     const signOut = async () => {
         const hasBothRoles = profile.vehicle && profile.business;
         if (hasBothRoles) {
@@ -990,6 +1010,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             secondaryOnboardingRole, startSecondaryOnboarding: (r) => { setRole(r); setSecondaryOnboardingRole(r); },
             cancelSecondaryOnboarding: () => setSecondaryOnboardingRole(null),
             toggleOnlineStatus, payCommission, signOut, uploadFile, loadUserData, syncProfile, updateActiveRole,
+            requestAccountDeletion,
             rideStats, orderStats, incomingRides, setIncomingRides,
             rejectedRideIds, setRejectedRideIds,
             appSettings,

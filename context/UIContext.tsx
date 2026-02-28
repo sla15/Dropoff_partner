@@ -15,7 +15,7 @@ interface UIContextType {
     closeChat: () => void;
     chatMessages: Record<string, ChatMessage[]>;
     sendMessage: (sessionId: string, text: string) => void;
-    showAlert: (title: string, message: string, onConfirm?: () => void) => void;
+    showAlert: (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -33,10 +33,12 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
-    const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm?: () => void }>({
+    const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm?: () => void; confirmText?: string; cancelText?: string }>({
         isOpen: false,
         title: '',
-        message: ''
+        message: '',
+        confirmText: 'OK',
+        cancelText: undefined
     });
 
     useEffect(() => {
@@ -75,8 +77,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setChatMessages(prev => ({ ...prev, [sessionId]: [...(prev[sessionId] || []), newMessage] }));
     };
 
-    const showAlert = (title: string, message: string, onConfirm?: () => void) => {
-        setAlertModal({ isOpen: true, title, message, onConfirm });
+    const showAlert = (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string) => {
+        setAlertModal({ isOpen: true, title, message, onConfirm, confirmText, cancelText });
     };
 
     return (
@@ -91,6 +93,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                 title={alertModal.title}
                 message={alertModal.message}
                 onConfirm={alertModal.onConfirm}
+                confirmText={alertModal.confirmText}
+                cancelText={alertModal.cancelText}
                 onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
                 isDarkMode={isDarkMode}
             />

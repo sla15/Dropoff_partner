@@ -7,7 +7,9 @@ interface AlertModalProps {
     message: string;
     onClose: () => void;
     onConfirm?: () => void;
+    onCancel?: () => void;
     confirmText?: string;
+    cancelText?: string;
     isDarkMode: boolean;
 }
 
@@ -17,7 +19,9 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     message,
     onClose,
     onConfirm,
+    onCancel,
     confirmText = 'OK',
+    cancelText,
     isDarkMode
 }) => {
     if (!isOpen) return null;
@@ -47,6 +51,20 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 
                 {/* Actions */}
                 <div className={`flex border-t ${isDarkMode ? 'border-white/10' : 'border-slate-100'}`}>
+                    {cancelText && (
+                        <button
+                            onClick={() => {
+                                if (onCancel) onCancel();
+                                onClose();
+                            }}
+                            className={`
+                                flex-1 py-4 text-[17px] font-bold transition-colors active:bg-black/5
+                                border-r ${isDarkMode ? 'border-white/10 text-zinc-400 active:bg-white/5' : 'border-slate-100 text-slate-400'}
+                            `}
+                        >
+                            {cancelText}
+                        </button>
+                    )}
                     <button
                         onClick={() => {
                             if (onConfirm) onConfirm();
