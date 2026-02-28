@@ -697,7 +697,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 console.error('Error removing channel:', error);
             }
         };
-    }, [user, role, profile.isOnline, profile.currentLat, profile.currentLng, rejectedRideIds]);
+    }, [user, role, profile.isOnline, profile.currentLat, profile.currentLng, rejectedRideIds, profile.vehicle?.type]);
 
     const completeOnboarding = async (targetProfile?: UserProfile) => {
         const activeProfile = targetProfile || profile;
