@@ -733,7 +733,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [user, role, profile.isOnline, profile.vehicle?.type]);
 
     const completeOnboarding = async (targetProfile?: UserProfile) => {
-        const activeProfile = targetProfile || profile;
+        // Fix for TypeError: merge with current profile to ensure 'documents' and other required fields exist
+        const activeProfile = targetProfile ? { ...profile, ...targetProfile } : profile;
         if (!user) {
             setIsOnboarded(true);
             return;
@@ -784,12 +785,12 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }, { onConflict: 'id' });
                 if (driverError) console.error("Driver Sync Error:", driverError);
 
-                if (activeProfile.documents.license?.url || activeProfile.documents.idCard?.url || activeProfile.documents.insurance?.url) {
+                if (activeProfile.documents?.license?.url || activeProfile.documents?.idCard?.url || activeProfile.documents?.insurance?.url) {
                     const { error: docsError } = await supabase.from('driver_documents').upsert({
                         driver_id: user.id,
-                        id_card_url: activeProfile.documents.idCard?.url,
-                        drivers_license_url: activeProfile.documents.license?.url,
-                        vehicle_insurance_url: activeProfile.documents.insurance?.url,
+                        id_card_url: activeProfile.documents.idCard?.url || null,
+                        drivers_license_url: activeProfile.documents.license?.url || null,
+                        vehicle_insurance_url: activeProfile.documents.insurance?.url || null,
                         status: 'pending'
                     }, { onConflict: 'driver_id' });
                     if (docsError) console.error("Driver Docs Sync Error:", docsError);
@@ -816,10 +817,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const { error: offlineError } = await supabase.from('drivers').update({ is_online: false }).eq('id', user.id);
                 if (offlineError) console.error("Error turning off driver status:", offlineError);
 
-                if (activeProfile.documents.idCard?.url) {
+                if (activeProfile.documents?.idCard?.url) {
                     const { error: merchDocError } = await supabase.from('merchant_documents').upsert({
                         merchant_id: user.id,
-                        id_card_url: activeProfile.documents.idCard.url,
+                        id_card_url: activeProfile.documents?.idCard?.url,
                         status: 'pending'
                     }, { onConflict: 'merchant_id' });
                     if (merchDocError) console.error("Merchant Doc Sync Error:", merchDocError);
@@ -839,68 +840,67 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!user) return;
 
         try {
-            // 1. Sync Base Profile
-            // Only update avatar_url if the User Profile Image (Driver Photo) has changed.
-            // Business Logo updates are handled separately in 'businesses' table update.
+            // Ensure targetProfile has all necessary fields by merging with current profile
+            const activeProfile = { ...profile, ...targetProfile };
 
-            const profileUpdates: any = {
-                full_name: targetProfile.name,
-                avatar_url: targetProfile.image, // Strictly Driver/User avatar
-                location: targetProfile.location,
-            };
-
-            const { error: profileError } = await supabase.from('profiles').update(profileUpdates).eq('id', user.id);
+            const { error: profileError } = await supabase.from('profiles').update({
+                full_name: activeProfile.name,
+                avatar_url: activeProfile.image, // Strictly Driver/User avatar
+                location: activeProfile.location,
+            }).eq('id', user.id);
             if (profileError) throw profileError;
 
             // 2. Sync Driver Data if exists
-            if (targetProfile.vehicle) {
+            if (activeProfile.vehicle) {
                 const vehicleMapping: Record<string, string> = {
                     'SCOOTER_TUKTUK': 'scooter',
                     'ECONOMIC': 'economic',
                     'PREMIUM': 'premium'
                 };
-                const { error: driverError } = await supabase.from('drivers').update({
-                    vehicle_model: targetProfile.vehicle.model,
-                    vehicle_plate: targetProfile.vehicle.plate,
-                    vehicle_color: targetProfile.vehicle.color,
-                    vehicle_category: (vehicleMapping[targetProfile.vehicle.type] || 'economic') as any,
-                    is_online: targetProfile.isOnline,
-                    profile_picture: targetProfile.driverProfilePic
-                }).eq('id', user.id);
+                const { error: driverError } = await supabase.from('drivers').upsert({
+                    id: user.id,
+                    vehicle_model: activeProfile.vehicle.model,
+                    vehicle_plate: activeProfile.vehicle.plate,
+                    vehicle_color: activeProfile.vehicle.color,
+                    vehicle_category: (vehicleMapping[activeProfile.vehicle.type] || 'economic') as any,
+                    is_online: activeProfile.isOnline,
+                    profile_picture: activeProfile.driverProfilePic
+                }, { onConflict: 'id' });
                 if (driverError) console.error("Driver Sync Error:", driverError);
 
                 // Sync Driver Docs
-                if (targetProfile.documents.license?.url || targetProfile.documents.idCard?.url || targetProfile.documents.insurance?.url) {
+                if (activeProfile.documents?.license?.url || activeProfile.documents?.idCard?.url || activeProfile.documents?.insurance?.url) {
                     await supabase.from('driver_documents').upsert({
                         driver_id: user.id,
-                        id_card_url: targetProfile.documents.idCard?.url,
-                        drivers_license_url: targetProfile.documents.license?.url,
-                        vehicle_insurance_url: targetProfile.documents.insurance?.url,
+                        id_card_url: activeProfile.documents.idCard?.url || null,
+                        drivers_license_url: activeProfile.documents.license?.url || null,
+                        vehicle_insurance_url: activeProfile.documents.insurance?.url || null,
                     }, { onConflict: 'driver_id' });
                 }
             }
 
             // 3. Sync Merchant Data if exists
-            if (targetProfile.business) {
-                const { error: businessError } = await supabase.from('businesses').update({
-                    name: targetProfile.business.businessName,
-                    category: targetProfile.business.category,
-                    location_address: targetProfile.business.address,
-                    image_url: targetProfile.business.logo,
-                    lat: targetProfile.business.lat,
-                    lng: targetProfile.business.lng,
-                    payment_phone: targetProfile.business.paymentPhone,
-                    sub_categories: targetProfile.business.subCategories || [],
-                    working_hours: targetProfile.business.workingHours,
-                    working_days: targetProfile.business.workingDays
-                }).eq('owner_id', user.id);
+            if (activeProfile.business) {
+                const { error: businessError } = await supabase.from('businesses').upsert({
+                    owner_id: user.id,
+                    name: activeProfile.business.businessName,
+                    category: activeProfile.business.category,
+                    location_address: activeProfile.business.address,
+                    image_url: activeProfile.business.logo,
+                    lat: activeProfile.business.lat,
+                    lng: activeProfile.business.lng,
+                    payment_phone: activeProfile.business.paymentPhone,
+                    sub_categories: activeProfile.business.subCategories || [],
+                    working_hours: activeProfile.business.workingHours,
+                    working_days: activeProfile.business.workingDays
+                }, { onConflict: 'owner_id' });
                 if (businessError) console.error("Business Sync Error:", businessError);
 
                 // Sync Merchant Doc (ID Card only)
-                if (targetProfile.documents.idCard?.url) {
+                if (activeProfile.documents?.idCard?.url) {
                     await supabase.from('merchant_documents').upsert({
                         merchant_id: user.id,
-                        id_card_url: targetProfile.documents.idCard.url,
+                        id_card_url: activeProfile.documents?.idCard?.url,
                     }, { onConflict: 'merchant_id' });
                 }
             }

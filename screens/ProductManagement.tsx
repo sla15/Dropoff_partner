@@ -176,7 +176,13 @@ export const ProductManagement: React.FC = () => {
                                         <div className="flex justify-between items-start">
                                             <div className="flex gap-4">
                                                 <div className="w-16 h-16 bg-gray-100 dark:bg-zinc-800 rounded-2xl overflow-hidden shrink-0">
-                                                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                                                    {product.image ? (
+                                                        <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                                                            <ImageIcon size={24} />
+                                                        </div>
+                                                    )}
                                                 </div>
                                                 <div>
                                                     <h3 className="font-bold text-gray-900 dark:text-white text-base">{product.name}</h3>
@@ -294,7 +300,7 @@ export const ProductManagement: React.FC = () => {
                                         </div>
                                     ) : (editingProduct?.image || newProduct.image) ? (
                                         <>
-                                            <img src={editingProduct?.image || newProduct.image} className="h-full w-full object-cover" />
+                                            <img src={editingProduct?.image || newProduct.image || undefined} className="h-full w-full object-cover" />
                                             <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                                                 <Upload className="text-white" size={20} />
                                             </div>

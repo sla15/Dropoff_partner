@@ -36,7 +36,14 @@ export const ProfileScreen: React.FC = () => {
 
   // Header branding logic: Driver profile shows personal info (preferring driver-specific pic), Merchant profile shows business info
   const displayName = role === 'DRIVER' ? profile.name : (profile.business?.businessName || profile.name);
-  const displayImage = role === 'DRIVER' ? (profile.driverProfilePic || profile.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`) : (profile.business?.logo || profile.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`);
+  const displayImage = role === 'DRIVER' ? (profile.driverProfilePic || profile.image) : profile.business?.logo;
+
+  const getInitials = (userName: string) => {
+    if (!userName) return 'DP';
+    const names = userName.split(' ');
+    if (names.length >= 2) return (names[0][0] + names[1][0]).toUpperCase();
+    return (userName[0] + (userName[1] || '')).toUpperCase();
+  };
 
   return (
     <div className="h-full flex flex-col bg-slate-50 dark:bg-black transition-colors duration-300 overflow-hidden">
@@ -50,12 +57,18 @@ export const ProfileScreen: React.FC = () => {
         <div className="flex flex-col items-center my-10 shrink-0 px-6">
           <div className="relative mb-6">
             <div className="w-[124px] h-[124px] rounded-full p-1 bg-gradient-to-b from-[#00E39A]/40 to-transparent relative group cursor-pointer" onClick={() => document.getElementById('prof-avatar-input')?.click()}>
-              <div className="w-full h-full rounded-full border-[5px] border-white dark:border-[#121212] overflow-hidden shadow-xl bg-slate-100 dark:bg-zinc-800 relative">
-                <img
-                  src={displayImage}
-                  className="w-full h-full object-cover"
-                  alt={displayName}
-                />
+              <div className="w-full h-full rounded-full border-[5px] border-white dark:border-[#121212] overflow-hidden shadow-xl bg-slate-100 dark:bg-zinc-800 relative flex items-center justify-center">
+                {displayImage ? (
+                  <img
+                    src={displayImage}
+                    className="w-full h-full object-cover"
+                    alt={displayName}
+                  />
+                ) : (
+                  <span className="text-3xl font-black text-slate-400 dark:text-slate-500 tracking-tighter">
+                    {getInitials(displayName)}
+                  </span>
+                )}
                 <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                   <Camera className="text-white" size={24} />
                 </div>

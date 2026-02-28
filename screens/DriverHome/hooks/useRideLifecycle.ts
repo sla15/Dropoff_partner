@@ -58,7 +58,8 @@ export const useRideLifecycle = (
         const { error } = await supabase
             .from('rides')
             .update({ status: 'accepted', driver_id: user.id })
-            .eq('id', currentRide.id);
+            .eq('id', currentRide.id)
+            .eq('status', 'searching'); // Ensure we only accept if it's still searching
 
         if (error) {
             console.error("Error accepting ride:", error);
@@ -234,8 +235,12 @@ export const useRideLifecycle = (
                 filter: `id=eq.${currentRide.id}`
             }, (payload) => {
                 const updatedRide = payload.new;
-                if (updatedRide.status === 'cancelled') {
-                    pushNotification('Ride Cancelled', 'The customer has cancelled the ride.', 'SYSTEM');
+                if (updatedRide.status === 'cancelled' || (updatedRide.status === 'accepted' && updatedRide.driver_id !== user.id)) {
+                    const isOtherDriver = updatedRide.status === 'accepted' && updatedRide.driver_id !== user.id;
+                    const title = isOtherDriver ? 'Ride Unavailable' : 'Ride Cancelled';
+                    const message = isOtherDriver ? 'This ride was just accepted by another driver.' : 'The customer has cancelled the ride.';
+
+                    pushNotification(title, message, 'SYSTEM');
                     setCurrentRide(null);
                     setRideStatus('IDLE');
                     setIsDrawerExpanded(false);

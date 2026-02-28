@@ -87,6 +87,10 @@ export const OnboardingDriverFlow: React.FC<OnboardingDriverFlowProps> = ({ step
                   <Loader2 className="animate-spin text-[#00E39A]" size={32} />
                 ) : profile.image ? (
                   <img src={profile.image} className="w-full h-full object-cover" />
+                ) : profile.name ? (
+                  <span className="text-3xl font-black text-slate-400 dark:text-slate-500 uppercase">
+                    {(profile.name.split(' ')[0][0] + (profile.name.split(' ')[1]?.[0] || '')).toUpperCase()}
+                  </span>
                 ) : (
                   <User size={48} className="text-slate-300" />
                 )}

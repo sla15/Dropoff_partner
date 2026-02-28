@@ -194,8 +194,16 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
         <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
           {/* Logo Upload */}
           <div className="flex flex-col items-center">
-            <div onClick={() => document.getElementById('b-logo-onb')?.click()} className="w-24 h-24 rounded-3xl bg-slate-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden border-2 border-dashed border-slate-200 dark:border-zinc-800 cursor-pointer">
-              {isUploading === 'logo' ? <Loader2 className="animate-spin text-[#00E39A]" /> : business.logo ? <img src={business.logo} className="w-full h-full object-cover" /> : <Store className="text-slate-300" />}
+            <div onClick={() => document.getElementById('b-logo-onb')?.click()} className="w-24 h-24 rounded-3xl bg-slate-100 dark:bg-zinc-900 flex items-center justify-center overflow-hidden border-2 border-dashed border-slate-200 dark:border-zinc-800 cursor-pointer text-slate-400 font-black text-2xl uppercase">
+              {isUploading === 'logo' ? (
+                <Loader2 className="animate-spin text-[#00E39A]" />
+              ) : business.logo ? (
+                <img src={business.logo} className="w-full h-full object-cover" />
+              ) : business.name ? (
+                <span>{(business.name.split(' ')[0][0] + (business.name.split(' ')[1]?.[0] || '')).toUpperCase()}</span>
+              ) : (
+                <Store className="text-slate-300" />
+              )}
             </div>
             <input id="b-logo-onb" type="file" className="hidden" accept="image/*" onChange={(e) => handleFileUpload(e, 'logo')} />
             <span className="text-[10px] font-black text-slate-400 uppercase mt-3 tracking-widest">Store Logo</span>
