@@ -193,11 +193,11 @@ export const DriverHome: React.FC = () => {
                     rideStatus={rideStatus}
                     isDrawerExpanded={isDrawerExpanded}
                     toggleDrawer={toggleDrawer}
+                    onAccept={handleAcceptRide}
                     onDecline={handleDeclineRide}
                     onCancel={async () => {
                         if (!currentRide) return;
                         const originalStatus = rideStatus;
-                        let finalStatus: 'cancelled' | 'completed' = 'cancelled';
 
                         if (originalStatus === 'NAVIGATING' && currentRide.pickup_lat && currentRide.pickup_lng && profile.currentLat && profile.currentLng) {
                             const actualDist = calculateDistance(currentRide.pickup_lat, currentRide.pickup_lng, profile.currentLat, profile.currentLng);
@@ -242,7 +242,6 @@ export const DriverHome: React.FC = () => {
                         setCurrentRide(null);
                         setIncomingRides([]);
                         setRideStatus('IDLE');
-                        if (directionsRenderer.current) directionsRenderer.current.setDirections({ routes: [] });
                         setIsDrawerExpanded(false);
                     }}
                     onArrived={handleArrivedAtPickup}

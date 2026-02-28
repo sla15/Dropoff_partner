@@ -74,7 +74,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                 ) : (
                     <>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Rate {currentRide?.passengerName}</h3>
-                        <p className="text-gray-400 text-sm mb-6">How was your interaction?</p>
+                        <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-6">Optional Feedback</p>
                         <div className="flex justify-center gap-2 mb-8 mt-4">
                             {[1, 2, 3, 4, 5].map((star) => (
                                 <button key={star} onClick={() => setUserRating(star)}>
@@ -84,16 +84,18 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                         </div>
                         <button
                             onClick={submitRating}
-                            className="w-full py-4 rounded-2xl font-bold bg-[#00E39A] text-black shadow-lg active:scale-95 transition-transform mb-3"
+                            className="w-full py-4 rounded-2xl font-bold bg-[#00E39A] text-black shadow-lg active:scale-95 transition-transform mb-3 uppercase tracking-widest"
                         >
-                            Submit Rating
+                            {userRating > 0 ? 'Submit Rating' : 'Skip for Now'}
                         </button>
-                        <button
-                            onClick={handleSkipRating}
-                            className="w-full py-3 rounded-2xl font-bold text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                            Skip for Now
-                        </button>
+                        {userRating > 0 && (
+                            <button
+                                onClick={handleSkipRating}
+                                className="w-full py-3 rounded-2xl font-bold text-gray-400 hover:text-gray-600 transition-colors uppercase text-[10px] tracking-widest"
+                            >
+                                Skip
+                            </button>
+                        )}
                     </>
                 )}
             </div>
