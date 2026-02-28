@@ -36,7 +36,8 @@ export const DriverHome: React.FC = () => {
         setRejectedRideIds,
         setCurrentTab,
         syncProfile,
-        isDarkMode
+        isDarkMode,
+        showAlert
     } = useApp();
 
     const [isDrawerExpanded, setIsDrawerExpanded] = useState(false);
@@ -88,6 +89,7 @@ export const DriverHome: React.FC = () => {
         rejectedRideIds,
         setRejectedRideIds,
         pushNotification,
+        showAlert,
         setShowRatingModal,
         setHasCollectedPayment,
         setUserRating,

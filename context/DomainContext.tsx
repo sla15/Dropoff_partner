@@ -318,7 +318,8 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             const basePrice = Math.max(minFee, Math.round(distance * ratePerKm * multiplier));
 
             // Multi-stop surcharge: D10 for every additional stop beyond the first
-            const stopSurcharge = Math.max(0, (uniqueBusinessIds.length - 1) * 10);
+            const pricePerStop = parseFloat(settings?.price_per_stop || '10');
+            const stopSurcharge = Math.max(0, (uniqueBusinessIds.length - 1) * pricePerStop);
             const finalPrice = basePrice + stopSurcharge;
 
             // 6. Check if a ride already exists for this batch

@@ -14,6 +14,7 @@ export const useRideLifecycle = (
     rejectedRideIds: Set<string>,
     setRejectedRideIds: (ids: any) => void,
     pushNotification: any,
+    showAlert: (title: string, message: string, onConfirm?: () => void) => void,
     setShowRatingModal: (val: boolean) => void,
     setHasCollectedPayment: (val: boolean) => void,
     setUserRating: (val: number) => void,
@@ -54,19 +55,38 @@ export const useRideLifecycle = (
 
     const handleAcceptRide = async () => {
         if (!currentRide || !user) return;
-        setRideStatus('ACCEPTED');
-        const { error } = await supabase
+
+        // Optimistically mark as accepted in UI only AFTER db confirms it
+        // .select('id') returns the updated rows — if empty, the ride was already taken/cancelled
+        const { data: updatedRows, error } = await supabase
             .from('rides')
             .update({ status: 'accepted', driver_id: user.id })
             .eq('id', currentRide.id)
-            .eq('status', 'searching'); // Ensure we only accept if it's still searching
+            .eq('status', 'searching') // Only update if still searching (race-safe)
+            .select('id');
 
-        if (error) {
-            console.error("Error accepting ride:", error);
-            pushNotification('Error', 'Could not accept ride. Please try again.', 'SYSTEM');
-            setRideStatus('RINGING');
+        if (error || !updatedRows || updatedRows.length === 0) {
+            // Ride was already taken by another driver or customer cancelled
+            console.warn("[handleAcceptRide] Ride unavailable (no rows updated or error):", error);
+            showAlert('Ride Unavailable', 'This request has already been taken by another driver or was cancelled.');
+
+            // Remove stale ride from the queue and show the next one
+            const remaining = incomingRides.filter(r => r.id !== currentRide.id);
+            setIncomingRides(remaining);
+            if (remaining.length === 0) {
+                setCurrentRide(null);
+                setRideStatus('IDLE');
+                setIsDrawerExpanded(false);
+            } else {
+                setCurrentRide(remaining[0]);
+                setRideStatus('RINGING');
+                setCountdown(20);
+            }
             return;
         }
+
+        // DB confirmed — now update local UI state
+        setRideStatus('ACCEPTED');
 
         // REJECT ALL OTHER PENDING REQUESTS IN QUEUE
         const otherRideIds = incomingRides.filter(r => r.id !== currentRide.id).map(r => r.id);
@@ -224,6 +244,20 @@ export const useRideLifecycle = (
         }
     }, [incomingRides, currentRide, rejectedRideIds]);
 
+    // Watcher: if the currently shown ride is removed from incomingRides[] by ProfileContext
+    // (because another driver accepted it OR customer cancelled), dismiss the drawer immediately.
+    useEffect(() => {
+        if (!currentRide || rideStatus !== 'RINGING') return;
+        const isStillInQueue = incomingRides.some(r => r.id === currentRide.id);
+        if (!isStillInQueue) {
+            // Ride was silently taken or cancelled — close drawer now and show alert
+            showAlert('Ride Unavailable', 'This request has already been taken by another driver or was cancelled.');
+            setCurrentRide(null);
+            setRideStatus('IDLE');
+            setIsDrawerExpanded(false);
+        }
+    }, [incomingRides, currentRide?.id, rideStatus]);
+
     useEffect(() => {
         if (!currentRide) return;
         const channel = supabase
@@ -238,9 +272,9 @@ export const useRideLifecycle = (
                 if (updatedRide.status === 'cancelled' || (updatedRide.status === 'accepted' && updatedRide.driver_id !== user.id)) {
                     const isOtherDriver = updatedRide.status === 'accepted' && updatedRide.driver_id !== user.id;
                     const title = isOtherDriver ? 'Ride Unavailable' : 'Ride Cancelled';
-                    const message = isOtherDriver ? 'This ride was just accepted by another driver.' : 'The customer has cancelled the ride.';
+                    const message = isOtherDriver ? 'This request has already been taken by another driver.' : 'the customer has cancelled the search';
 
-                    pushNotification(title, message, 'SYSTEM');
+                    showAlert(title, message);
                     setCurrentRide(null);
                     setRideStatus('IDLE');
                     setIsDrawerExpanded(false);

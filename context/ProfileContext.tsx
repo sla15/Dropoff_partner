@@ -37,6 +37,7 @@ interface ProfileContextType {
         multiplier_economy: number;
         multiplier_premium: number;
         currency_symbol: string;
+        price_per_stop: number;
     };
     rejectedRideIds: Set<string>;
     setRejectedRideIds: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -152,7 +153,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     multiplier_scooter: Number(config.multiplier_scooter || 1),
                     multiplier_economy: Number(config.multiplier_economy || 1),
                     multiplier_premium: Number(config.multiplier_premium || 1.5),
-                    currency_symbol: config.currency_symbol || 'D'
+                    currency_symbol: config.currency_symbol || 'D',
+                    price_per_stop: Number(config.price_per_stop || 10)
                 });
             }
 
