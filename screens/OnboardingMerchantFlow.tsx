@@ -387,14 +387,14 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
 
       <div className="mt-auto space-y-3">
         <button
-          onClick={() => onNext()}
+          onClick={() => onNext({ business })}
           disabled={isUploading !== null}
           className="w-full bg-slate-900 dark:bg-white text-white dark:text-black font-black py-5 rounded-[22px] shadow-xl active:scale-[0.98] transition-all disabled:opacity-50"
         >
           Finish Setup
         </button>
         <button
-          onClick={() => onNext()}
+          onClick={() => onNext({ business })}
           className="w-full bg-transparent text-slate-400 font-bold py-2 text-sm uppercase tracking-widest"
         >
           Skip for Now

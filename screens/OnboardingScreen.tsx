@@ -74,7 +74,7 @@ export const OnboardingScreen: React.FC = () => {
   };
 
   const finalizeOnboarding = async (finalData?: any) => {
-    await completeOnboarding();
+    await completeOnboarding(finalData);
     // Use the role to determine where to go next
     if (selectedRole === 'MERCHANT' || secondaryOnboardingRole === 'MERCHANT') {
       setCurrentTab('orders');

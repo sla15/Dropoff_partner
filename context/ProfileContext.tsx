@@ -188,7 +188,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     seats: driverData.vehicle_category === 'tuktuk' ? 2 : 4,
                     hasAC: driverData.vehicle_category === 'AC',
                     images: []
-                } : undefined,
+                } : profile.vehicle,
                 business: merchantData ? {
                     id: merchantData.id,
                     businessName: merchantData.name,
@@ -203,12 +203,12 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     lat: merchantData.lat,
                     lng: merchantData.lng,
                     paymentPhone: merchantData.payment_phone || ''
-                } : undefined,
+                } : profile.business,
                 documents: {
-                    license: { url: driverDocs?.license_url || '', status: (driverDocs?.status as any) || 'MISSING' },
-                    idCard: { url: driverDocs?.id_card_url || merchantData?.id_card_url || '', status: (driverDocs?.status as any) || 'MISSING' },
-                    insurance: { url: driverDocs?.insurance_url || '', status: (driverDocs?.status as any) || 'MISSING' },
-                    permit: { url: driverDocs?.permit_url || '', status: (driverDocs?.status as any) || 'MISSING' }
+                    license: { url: driverDocs?.license_url || profile.documents.license?.url || '', status: (driverDocs?.status as any) || (profile.documents.license?.status) || 'MISSING' },
+                    idCard: { url: driverDocs?.id_card_url || merchantData?.id_card_url || profile.documents.idCard?.url || '', status: (driverDocs?.status as any) || (profile.documents.idCard?.status) || 'MISSING' },
+                    insurance: { url: driverDocs?.insurance_url || profile.documents.insurance?.url || '', status: (driverDocs?.status as any) || (profile.documents.insurance?.status) || 'MISSING' },
+                    permit: { url: driverDocs?.permit_url || profile.documents.permit?.url || '', status: (driverDocs?.status as any) || (profile.documents.permit?.status) || 'MISSING' }
                 },
                 currentLat: driverData?.current_lat,
                 currentLng: driverData?.current_lng,

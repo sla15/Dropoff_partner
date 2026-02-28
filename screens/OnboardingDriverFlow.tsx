@@ -173,13 +173,13 @@ export const OnboardingDriverFlow: React.FC<OnboardingDriverFlowProps> = ({ step
       </div>
       <div className="mt-6 space-y-3">
         <button
-          onClick={() => onNext()}
+          onClick={() => onNext({ vehicle })}
           className="w-full bg-slate-900 dark:bg-white text-white dark:text-black font-black py-5 rounded-[22px] shadow-xl active:scale-95 transition-all"
         >
           Complete Setup
         </button>
         <button
-          onClick={() => onNext()}
+          onClick={() => onNext({ vehicle })}
           className="w-full bg-transparent text-slate-400 font-bold py-2 text-sm uppercase tracking-widest"
         >
           Skip for Now
