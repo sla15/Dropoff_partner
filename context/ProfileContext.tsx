@@ -565,9 +565,19 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 table: 'rides'
             }, (payload) => {
                 const updatedRide = payload.new;
-                // If the updated ride is our current incoming ride and is no longer searching, clear it
                 // If the updated ride is no longer searching, remove it from the queue
-                setIncomingRides(prev => prev.filter(r => r.id !== updatedRide.id || updatedRide.status === 'searching'));
+                if (updatedRide.status !== 'searching') {
+                    setIncomingRides(prev => prev.filter(r => r.id !== updatedRide.id));
+                } else {
+                    // If it's still searching, check if we should show it (maybe it's a batch update)
+                    const estCommission = (parseFloat(updatedRide.price || '0') * appSettings.commission_percentage) / 100;
+                    const currentProfile = profileRef.current;
+                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+
+                    if (!rejectedRideIdsRef.current.has(updatedRide.id) && !isOverDebtLimit) {
+                        handleNewRide(updatedRide);
+                    }
+                }
             })
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
@@ -604,17 +614,18 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             const { data: pendingRides } = await query
                 .order('created_at', { ascending: false })
-                .limit(1);
+                .limit(10);
 
             if (pendingRides && pendingRides.length > 0) {
-                const latestRide = pendingRides[0];
-                const estCommission = (parseFloat(latestRide.price || '0') * appSettings.commission_percentage) / 100;
-                const currentProfile = profileRef.current;
-                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                pendingRides.forEach(ride => {
+                    const estCommission = (parseFloat(ride.price || '0') * appSettings.commission_percentage) / 100;
+                    const currentProfile = profileRef.current;
+                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
 
-                if (!rejectedRideIdsRef.current.has(latestRide.id) && !isOverDebtLimit) {
-                    handleNewRide(latestRide);
-                }
+                    if (!rejectedRideIdsRef.current.has(ride.id) && !isOverDebtLimit) {
+                        handleNewRide(ride);
+                    }
+                });
             }
         };
 
@@ -975,7 +986,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const timestamp = new Date().toISOString();
         const { error } = await supabase
             .from('profiles')
-            .update({ deletion_requested_at: timestamp })
+            .update({
+                deletion_requested_at: timestamp,
+                deleted_at: timestamp
+            })
             .eq('id', user.id);
 
         if (error) {
@@ -984,7 +998,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         // Locally update profile state
-        setProfile(prev => ({ ...prev, deletion_requested_at: timestamp }));
+        setProfile(prev => ({
+            ...prev,
+            deletion_requested_at: timestamp,
+            deleted_at: timestamp
+        }));
         return { success: true };
     };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Clock, CheckCircle, Package, MessageSquare, X, Check, Trash2 } from 'lucide-react';
+import { Clock, CheckCircle, Package, MessageSquare, X, Check, Trash2, Truck } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { ActionButton } from '../components/ActionButton';
 import { Order, OrderStatus } from '../types';
@@ -10,7 +10,8 @@ const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
         accepted: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
         preparing: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
         ready: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-        delivering: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+        delivering: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+        arrived: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
         completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
         cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
     };
@@ -69,7 +70,7 @@ export const MerchantOrders: React.FC = () => {
 
                 {/* Filter Pills */}
                 <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
-                    {['ALL', 'pending', 'accepted', 'preparing', 'ready', 'delivering', 'completed', 'cancelled'].map((s) => (
+                    {['ALL', 'pending', 'accepted', 'preparing', 'ready', 'arrived', 'delivering', 'completed', 'cancelled'].map((s) => (
                         <button
                             key={s}
                             onClick={() => setFilter(s as any)}
@@ -202,9 +203,6 @@ export const MerchantOrders: React.FC = () => {
                             <div className="space-y-3">
                                 {selectedOrder.status === 'pending' && (
                                     <div className="flex gap-2">
-                                        <button onClick={() => handleRejectOrder(selectedOrder.id)} className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-2xl flex items-center justify-center">
-                                            <X size={24} />
-                                        </button>
                                         <button onClick={() => handleStatusChange(selectedOrder.id, 'accepted')} className="flex-1 h-16 bg-[#00E39A] text-black font-black rounded-2xl text-lg shadow-lg">
                                             Accept Order
                                         </button>
@@ -226,22 +224,33 @@ export const MerchantOrders: React.FC = () => {
                                         <p className="text-orange-600 dark:text-orange-400 text-sm font-bold">Searching for a driver...</p>
                                     </div>
                                 )}
-                                {['delivering', 'ready'].includes(selectedOrder.status) && (
+                                {selectedOrder.status === 'arrived' && (
+                                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/30 flex items-center gap-3">
+                                        <Truck className="animate-pulse text-blue-500" size={20} />
+                                        <p className="text-blue-600 dark:text-blue-400 text-sm font-bold">Driver has arrived for pickup!</p>
+                                    </div>
+                                )}
+                                {['delivering', 'arrived', 'ready', 'preparing', 'accepted'].includes(selectedOrder.status) && (
                                     <button onClick={() => handleStatusChange(selectedOrder.id, 'completed')} className="w-full h-16 bg-green-600 dark:bg-green-500 text-white font-black rounded-2xl text-lg shadow-lg mt-2">
                                         Force Complete Order
+                                    </button>
+                                )}
+                                {['pending', 'accepted', 'preparing', 'ready', 'arrived'].includes(selectedOrder.status) && (
+                                    <button onClick={() => handleRejectOrder(selectedOrder.id)} className="w-full h-16 bg-red-50 dark:bg-red-900/10 text-red-500 font-bold rounded-2xl border border-red-100 dark:border-red-900/30 mt-2">
+                                        Reject Order
                                     </button>
                                 )}
                                 {['completed', 'cancelled'].includes(selectedOrder.status) && (
                                     <button
                                         onClick={async () => {
-                                            if (window.confirm('Delete this order record?')) {
+                                            if (window.confirm('Remove this order from your view? (It will be hidden but remain in our records)')) {
                                                 await deleteOrder(selectedOrder.id);
                                                 setSelectedOrder(null);
                                             }
                                         }}
                                         className="w-full h-16 bg-red-50 dark:bg-red-900/10 text-red-500 font-bold rounded-2xl border border-red-100 dark:border-red-900/30"
                                     >
-                                        Delete Record
+                                        Remove from View
                                     </button>
                                 )}
                             </div>

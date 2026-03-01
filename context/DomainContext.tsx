@@ -66,8 +66,7 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 .from('orders')
                 .select('*, customer:profiles!orders_customer_id_fkey(full_name, phone)')
                 .eq('business_id', businessId)
-                // .neq('status', 'cancelled') // Removed per user request to manual delete
-                // .neq('status', 'completed') // Removed per user request to manual delete
+                .eq('hidden_by_merchant', false)
                 .order('created_at', { ascending: false });
 
             console.log(`[DomainContext] Loaded ${ordersData?.length} orders for business ${businessId}`);
@@ -141,6 +140,7 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     .select('*')
                     .eq('business_id', business.id)
                     .eq('status', 'completed')
+                    .eq('hidden_by_merchant', false)
                     .order('created_at', { ascending: false });
                 merchantOrders = ordersData || [];
             }
@@ -226,7 +226,13 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         schema: 'public',
                         table: 'orders',
                         filter: `business_id=eq.${business.id}`
-                    }, () => loadMerchantOrders(business.id))
+                    }, () => {
+                        try {
+                            loadMerchantOrders(business.id);
+                        } catch (err) {
+                            console.error("[Realtime] Error loading orders:", err);
+                        }
+                    })
                     .subscribe();
 
                 // 2. Products Subscription (for this business)
@@ -237,7 +243,13 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         schema: 'public',
                         table: 'products',
                         filter: `business_id=eq.${business.id}`
-                    }, () => loadProducts(business.id))
+                    }, () => {
+                        try {
+                            loadProducts(business.id);
+                        } catch (err) {
+                            console.error("[Realtime] Error loading products:", err);
+                        }
+                    })
                     .subscribe();
             }
 
@@ -444,26 +456,22 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     const deleteOrder = async (orderId: string) => {
         try {
-            console.log("Attempting to delete order:", orderId);
+            console.log("Attempting to hide order from merchant:", orderId);
             const { data } = await supabase.from('orders').select('business_id').eq('id', orderId).single();
 
-            // 1. Delete associated rides (if any) to prevent FK violation
-            const { error: rideError } = await supabase.from('rides').delete().eq('order_id', orderId);
-            if (rideError) console.warn("Error deleting associated ride (might not exist):", rideError);
+            // Soft delete: just mark as hidden for merchant
+            const { error } = await supabase
+                .from('orders')
+                .update({ hidden_by_merchant: true })
+                .eq('id', orderId);
 
-            // 2. Delete order items
-            const { error: itemsError } = await supabase.from('order_items').delete().eq('order_id', orderId);
-            if (itemsError) throw itemsError;
-
-            // 3. Delete the order itself
-            const { error } = await supabase.from('orders').delete().eq('id', orderId);
             if (error) throw error;
 
-            console.log("Order deleted successfully");
+            console.log("Order hidden successfully from merchant");
             if (data?.business_id) await loadMerchantOrders(data.business_id);
             return true;
         } catch (err) {
-            console.error("Error deleting order:", err);
+            console.error("Error hiding order:", err);
             return false;
         }
     };
@@ -516,6 +524,34 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // 2. If status is 'ready', automatically create a delivery request
             if (status === 'ready') {
                 await createDeliveryRequest(orderId);
+            }
+
+            // 3. If status is 'cancelled', check if we need to cancel the associated ride
+            if (status === 'cancelled') {
+                const { data: orderData } = await supabase.from('orders').select('batch_id').eq('id', orderId).single();
+                if (orderData?.batch_id) {
+                    const { data: otherOrders } = await supabase
+                        .from('orders')
+                        .select('id')
+                        .eq('batch_id', orderData.batch_id)
+                        .in('status', ['accepted', 'preparing', 'ready', 'delivering'])
+                        .neq('id', orderId);
+
+                    if (!otherOrders || otherOrders.length === 0) {
+                        // All orders in batch are cancelled/completed, cancel the ride if it's still searching or accepted
+                        const { data: ride } = await supabase
+                            .from('rides')
+                            .select('id')
+                            .eq('batch_id', orderData.batch_id)
+                            .neq('status', 'completed')
+                            .neq('status', 'cancelled')
+                            .maybeSingle();
+
+                        if (ride) {
+                            await supabase.from('rides').update({ status: 'cancelled' }).eq('id', ride.id);
+                        }
+                    }
+                }
             }
 
             // Reload for consistency

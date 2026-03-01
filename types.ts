@@ -1,7 +1,7 @@
 
 export type Role = 'DRIVER' | 'MERCHANT' | 'CUSTOMER';
 
-export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'delivering' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'arrived' | 'delivering' | 'completed' | 'cancelled';
 export type RideStatus = 'IDLE' | 'RINGING' | 'ACCEPTED' | 'ARRIVED' | 'NAVIGATING' | 'COMPLETED';
 
 export interface Product {
@@ -120,6 +120,8 @@ export interface UserProfile {
   currentLng?: number;
   heading?: number;
   isSuspended: boolean;
+  deletion_requested_at?: string;
+  deleted_at?: string;
 }
 
 export interface AppNotification {

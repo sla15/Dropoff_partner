@@ -182,8 +182,7 @@ export const ProfileScreen: React.FC = () => {
                   async () => {
                     const { success } = await requestAccountDeletion();
                     if (success) {
-                      setShowSupportDrawer(true);
-                      pushNotification('Request Submitted', 'Our team will review your deletion request.', 'SYSTEM');
+                      await signOut();
                     } else {
                       pushNotification('Error', 'Could not submit deletion request. Please try again.', 'SYSTEM');
                     }
