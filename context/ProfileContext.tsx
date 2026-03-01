@@ -272,7 +272,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (activeRide.batch_id) {
                     const { data: batchOrders } = await supabase
                         .from('orders')
-                        .select('total_amount, business_id, businesses(name, business_phone, location_address)')
+                        .select('total_amount, business_id, businesses(name, payment_phone, location_address)')
                         .eq('batch_id', activeRide.batch_id)
                         .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
 
@@ -297,18 +297,19 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const stopsData = typeof activeRide.stops === 'string' ? JSON.parse(activeRide.stops) : activeRide.stops;
                     if (Array.isArray(stopsData)) {
                         merchants = stopsData.map((s: any) => {
+                            // If it's already an object (JSONB), use it. 
+                            // If it's a string, it might be a legacy address or a JSON string.
                             let parsed = s;
                             if (typeof s === 'string') {
                                 try {
                                     parsed = JSON.parse(s);
                                 } catch (e) {
-                                    // It's just a regular address string from older rides
                                     parsed = { business_address: s };
                                 }
                             }
                             return {
                                 name: parsed?.business_name || parsed?.name || 'Shop',
-                                phone: parsed?.business_phone || parsed?.phone || '',
+                                phone: parsed?.business_phone || parsed?.phone || parsed?.payment_phone || '',
                                 address: parsed?.business_address || parsed?.address || '',
                                 amount: parsed?.estimated_cash || 0
                             };
@@ -693,7 +694,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         if (newRide.batch_id) {
                             const { data: batchOrders } = await supabase
                                 .from('orders')
-                                .select('total_amount, business_id, businesses(name, business_phone, location_address)')
+                                .select('total_amount, business_id, businesses(name, payment_phone, location_address)')
                                 .eq('batch_id', newRide.batch_id)
                                 .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
 
@@ -723,16 +724,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                                         try {
                                             parsed = JSON.parse(s);
                                         } catch (e) {
-                                            // It's just a regular address string
                                             parsed = { business_address: s };
                                         }
                                     }
                                     return {
                                         name: parsed?.business_name || parsed?.name || 'Shop',
-                                        phone: parsed?.business_phone || parsed?.phone || '',
+                                        phone: parsed?.business_phone || parsed?.phone || parsed?.payment_phone || '',
                                         address: parsed?.business_address || parsed?.address || '',
                                         amount: parsed?.estimated_cash || 0
-                                    };
+                                    }
                                 });
                             }
                         }

@@ -101,7 +101,8 @@ export const useRideLifecycle = (
                 });
             }
 
-            pushNotification('Ride Accepted', `Navigating to pickup`, 'SYSTEM');
+            const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
+            pushNotification(isDelivery ? 'Delivery Accepted' : 'Ride Accepted', `Navigating to pickup`, 'SYSTEM');
             setIncomingRides([]); // Clear the queue since we accepted one
         } finally {
             setIsProcessing(false);
@@ -114,8 +115,9 @@ export const useRideLifecycle = (
         try {
             setRideStatus('ARRIVED');
             await supabase.from('rides').update({ status: 'arrived' }).eq('id', currentRide.id);
-            pushNotification('You have Arrived', 'Notify the passenger you are here.', 'SYSTEM');
-            notifyCustomer('Driver Arrived', 'Your driver has arrived at the pickup location!');
+            const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
+            pushNotification(isDelivery ? 'Delivery Update' : 'You have Arrived', isDelivery ? 'Notify the merchant you are here.' : 'Notify the passenger you are here.', 'SYSTEM');
+            notifyCustomer('Driver Arrived', isDelivery ? 'Your driver has arrived at the pickup location!' : 'Your driver has arrived at the pickup location!');
         } finally {
             setIsProcessing(false);
         }
@@ -128,8 +130,9 @@ export const useRideLifecycle = (
             setRideStatus('NAVIGATING');
             setIsDrawerExpanded(false);
             await supabase.from('rides').update({ status: 'in-progress' }).eq('id', currentRide.id);
-            pushNotification('Ride Started', 'Destination revealed. Drive safely!', 'RIDE');
-            notifyCustomer('Trip Started', 'Your driver has started the trip. Enjoy the ride!');
+            const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
+            pushNotification(isDelivery ? 'Delivery Started' : 'Ride Started', isDelivery ? 'Delivery in progress. Drive safely!' : 'Destination revealed. Drive safely!', 'RIDE');
+            notifyCustomer(isDelivery ? 'Delivery Started' : 'Trip Started', isDelivery ? 'Your package is on the way!' : 'Your driver has started the trip. Enjoy the ride!');
             if (user && !profile.isOnline) {
                 await supabase.from('drivers').update({ is_online: true }).eq('id', user.id);
             }
@@ -156,12 +159,13 @@ export const useRideLifecycle = (
 
             setCurrentRide(prev => prev ? { ...prev, price: data.final_price } : null);
 
+            const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
             if (data.final_price > 0) {
-                notifyCustomer('Trip Completed', 'You have arrived at your destination. Thank you for riding!');
-                pushNotification('Ride Completed', `Total: ${appSettings.currency_symbol}${data.final_price}`, 'RIDE');
+                notifyCustomer(isDelivery ? 'Delivery Completed' : 'Trip Completed', isDelivery ? 'Your delivery has been completed. Thank you!' : 'You have arrived at your destination. Thank you for riding!');
+                pushNotification(isDelivery ? 'Delivery Completed' : 'Ride Completed', `Total: ${appSettings.currency_symbol}${data.final_price}`, 'RIDE');
             } else {
-                notifyCustomer('Ride Cancelled', 'The ride was ended with zero movement.');
-                pushNotification('Ride Ended', 'No movement detected. Ride cancelled.', 'SYSTEM');
+                notifyCustomer(isDelivery ? 'Delivery Cancelled' : 'Ride Cancelled', 'The ride was ended with zero movement.');
+                pushNotification(isDelivery ? 'Delivery Ended' : 'Ride Ended', 'No movement detected. Ride cancelled.', 'SYSTEM');
                 setRideStatus('IDLE');
                 setCurrentRide(null);
                 setIsDrawerExpanded(false);

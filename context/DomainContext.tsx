@@ -313,10 +313,10 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 name: o.businesses?.name || 'Shop',
                 address: o.businesses?.location_address || '',
                 amount: parseFloat(o.total_amount || '0'),
-                phone: o.businesses?.business_phone || ''
+                phone: o.businesses?.payment_phone || o.businesses?.phone || ''
             })) || [];
 
-            const stops = merchants.map(m => JSON.stringify({
+            const stops = merchants.map(m => ({
                 business_id: m.id,
                 business_name: m.name,
                 business_address: m.address,

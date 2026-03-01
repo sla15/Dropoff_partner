@@ -42,8 +42,8 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                 {!hasCollectedPayment ? (
                     <>
                         <div className="mb-4">
-                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentRide?.type === 'DELIVERY' ? 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400'}`}>
-                                {currentRide?.type === 'DELIVERY' ? 'Delivery Summary' : 'Ride Summary'}
+                            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${currentRide?.type === 'PASSENGER' ? 'bg-blue-100 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400' : 'bg-orange-100 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'}`}>
+                                {currentRide?.type === 'PASSENGER' ? 'Ride Summary' : 'Delivery Summary'}
                             </span>
                         </div>
 
@@ -62,7 +62,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                         <div className="bg-[#00E39A]/10 dark:bg-[#00E39A]/5 rounded-2xl py-6 px-4 mb-6 border border-[#00E39A]/20">
                             <p className="text-[10px] text-[#00E39A] uppercase font-black tracking-widest mb-1">Final Amount</p>
                             <p className="text-4xl font-black text-[#00E39A]">{appSettings.currency_symbol}{currentRide?.price?.toFixed(2)}</p>
-                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Confirm payment from {currentRide?.passengerName}</p>
+                            <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Confirm payment from {currentRide?.type === 'PASSENGER' ? currentRide?.passengerName : 'Customer'}</p>
                         </div>
                         <button
                             onClick={() => setHasCollectedPayment(true)}
@@ -73,7 +73,7 @@ export const RatingModal: React.FC<RatingModalProps> = ({
                     </>
                 ) : (
                     <>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Rate {currentRide?.passengerName}</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1">Rate {currentRide?.type === 'PASSENGER' ? currentRide?.passengerName : 'Customer'}</h3>
                         <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mb-6">Optional Feedback</p>
                         <div className="flex justify-center gap-2 mb-8 mt-4">
                             {[1, 2, 3, 4, 5].map((star) => (

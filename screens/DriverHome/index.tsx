@@ -241,8 +241,9 @@ export const DriverHome: React.FC = () => {
                             pushNotification('Sync Error', 'Failed to cancel trip.', 'SYSTEM');
                             return;
                         }
-                        notifyCustomer('Ride Cancelled', 'Driver had to cancel.');
-                        pushNotification('Trip Cancelled', 'Status changed to cancelled.', 'SYSTEM');
+                        const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
+                        notifyCustomer(isDelivery ? 'Delivery Cancelled' : 'Ride Cancelled', 'Driver had to cancel.');
+                        pushNotification(isDelivery ? 'Delivery Cancelled' : 'Trip Cancelled', 'Status changed to cancelled.', 'SYSTEM');
                         setCurrentRide(null);
                         setIncomingRides([]);
                         setRideStatus('IDLE');

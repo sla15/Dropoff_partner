@@ -30,7 +30,6 @@ export const NavigationOverlay: React.FC<NavigationOverlayProps> = ({
             <div
                 className="absolute z-[60] cursor-grab active:cursor-grabbing touch-none"
                 style={{ top: dragPos.y, left: dragPos.x }}
-                onHoverStart={handleDragStart} // Wait, the original was onTouchStart and onMouseDown
                 onTouchStart={handleDragStart}
                 onMouseDown={handleDragStart}
             >

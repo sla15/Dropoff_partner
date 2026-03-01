@@ -77,7 +77,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                     <div className="bg-black/80 backdrop-blur-md px-6 py-3 rounded-full border border-[#00E39A]/30 flex items-center gap-2 shadow-lg">
                         <div className="w-2 h-2 rounded-full bg-[#00E39A] animate-pulse"></div>
                         <span className="text-white font-bold text-sm tracking-wide">
-                            {queueCount > 1 ? `${queueCount} NEW REQUESTS` : `INCOMING ${rideType === 'DELIVERY' ? 'DELIVERY' : 'RIDE'}`}
+                            {queueCount > 1 ? `${queueCount} NEW REQUESTS` : `INCOMING ${rideType === 'DELIVERY' || rideType === 'MERCHANT_DELIVERY' ? 'DELIVERY' : 'RIDE'}`}
                         </span>
                     </div>
                 </div>
@@ -122,7 +122,9 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             <div>
                                 <div className="flex flex-col gap-1">
                                     <h3 className="text-xl font-bold text-gray-900 dark:text-white leading-none">
-                                        {rideStatus === 'RINGING' ? 'New Passenger' : currentRide.passengerName}
+                                        {rideStatus === 'RINGING'
+                                            ? (rideType === 'MERCHANT_DELIVERY' ? 'Merchant Delivery' : 'New Passenger')
+                                            : currentRide.passengerName}
                                     </h3>
                                     {isRideActive && (
                                         <div className="flex gap-2 mt-1">
@@ -138,7 +140,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                                 </div>
                                             )}
                                             {rideStatus === 'COMPLETED' && (
-                                                <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">Trip Completed</span>
+                                                <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">{rideType === 'PASSENGER' ? 'Trip Completed' : 'Delivery Completed'}</span>
                                             )}
                                         </div>
                                     )}
@@ -148,7 +150,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                         <div className="text-right">
                             {(rideStatus === 'RINGING' || rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED' || rideStatus === 'NAVIGATING') ? (
                                 <div className="flex flex-col items-end">
-                                    {rideType === 'DELIVERY' && currentRide.total_cash_upfront ? (
+                                    {(rideType === 'DELIVERY' || rideType === 'MERCHANT_DELIVERY') && currentRide.total_cash_upfront ? (
                                         <div className="mb-2 text-right">
                                             <div className="text-orange-500 text-sm font-black uppercase tracking-widest leading-none">Cash Needed</div>
                                             <div className="text-orange-600 dark:text-orange-400 text-2xl font-black">D{Math.ceil(currentRide.total_cash_upfront)}</div>
@@ -218,18 +220,23 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                 );
                             })
                         ) : currentRide.stops && currentRide.stops.length > 0 ? (
-                            currentRide.stops.map((stop, index) => (
-                                <div key={index} className="flex gap-4 mb-6 relative z-10">
-                                    <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-0.5">
-                                            <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest">PICKUP {currentRide.stops!.length > 1 ? index + 1 : ''}</span>
-                                            {index === 0 && <span className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-[10px] px-1.5 py-0.5 rounded">{currentRide.pickupDistance} Away</span>}
+                            currentRide.stops.map((stop: any, index: number) => {
+                                const isObj = stop && typeof stop === 'object';
+                                const name = isObj ? (stop.business_name || stop.name) : stop;
+                                return (
+                                    <div key={index} className="flex gap-4 mb-6 relative z-10">
+                                        <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-0.5">
+                                                <span className="text-[#00E39A] text-[10px] font-black uppercase tracking-widest">PICKUP {currentRide.stops!.length > 1 ? index + 1 : ''}</span>
+                                                {index === 0 && <span className="bg-gray-100 dark:bg-[#2C2C2E] text-gray-500 text-[10px] px-1.5 py-0.5 rounded">{currentRide.pickupDistance} Away</span>}
+                                            </div>
+                                            <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{name}</h4>
+                                            {isObj && stop.business_address && <p className="text-gray-500 text-xs truncate max-w-[200px]">{stop.business_address}</p>}
                                         </div>
-                                        <h4 className="text-gray-900 dark:text-white font-bold text-lg leading-tight">{stop}</h4>
                                     </div>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <div className="flex gap-4 mb-6 relative z-10">
                                 <div className="mt-1 w-4 h-4 rounded-full border-[3px] border-[#00E39A] bg-white dark:bg-[#1C1C1E] shrink-0 shadow-[0_0_10px_rgba(0,227,154,0.4)]"></div>
@@ -380,7 +387,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     </div>
 
                                     <SlideButton
-                                        label="Slide to Cancel Ride"
+                                        label={rideType === 'PASSENGER' ? "Slide to Cancel Ride" : "Slide to Cancel Delivery"}
                                         description="Emergency cancellation"
                                         onSlideComplete={onCancel}
                                         activeColor="#EF4444"
@@ -425,7 +432,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     </div>
 
                                     <SlideButton
-                                        label="Slide to Cancel Ride"
+                                        label={rideType === 'PASSENGER' ? "Slide to Cancel Ride" : "Slide to Cancel Delivery"}
                                         description="Emergency cancellation"
                                         onSlideComplete={onCancel}
                                         activeColor="#EF4444"
@@ -436,7 +443,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
 
                             {rideStatus === 'NAVIGATING' && (
                                 <div className="space-y-3">
-                                    {rideType === 'DELIVERY' && (
+                                    {(rideType === 'DELIVERY' || rideType === 'MERCHANT_DELIVERY') && (
                                         <button
                                             disabled={isProcessing}
                                             onClick={onComplete}
@@ -480,7 +487,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                                             </div>
                                                         ) : (
                                                             <>
-                                                                <CheckCircle size={22} /> FINISH RIDE
+                                                                <CheckCircle size={22} /> {rideType === 'PASSENGER' ? 'FINISH RIDE' : 'FINISH DELIVERY'}
                                                             </>
                                                         )}
                                                     </button>
@@ -510,7 +517,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     </div>
 
                                     <SlideButton
-                                        label="Slide to End Ride"
+                                        label={rideType === 'PASSENGER' ? "Slide to End Ride" : "Slide to End Delivery"}
                                         description="Emergency end session"
                                         onSlideComplete={onCancel}
                                         activeColor="#EF4444"
@@ -534,7 +541,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     href={`sms:${currentRide.passengerPhone}`}
                                     className="w-full bg-gray-100 dark:bg-[#2C2C2E] text-gray-900 dark:text-white h-14 rounded-2xl flex items-center justify-center border border-gray-200 dark:border-gray-700 font-black text-sm uppercase tracking-widest gap-2 active:scale-95 transition-transform"
                                 >
-                                    <MessageSquare size={18} /> Message Passenger
+                                    <MessageSquare size={18} /> {rideType === 'PASSENGER' ? 'Message Passenger' : 'Message Customer'}
                                 </a>
                             )}
 
@@ -544,7 +551,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     onClick={onDecline}
                                     className="w-full py-4 text-red-500 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10 rounded-2xl active:scale-95 transition-transform"
                                 >
-                                    <X size={18} /> Decline {rideType === 'DELIVERY' ? 'Delivery' : 'Ride'}
+                                    <X size={18} /> Decline {rideType === 'PASSENGER' ? 'Ride' : 'Delivery'}
                                 </button>
                             )}
 
@@ -553,7 +560,7 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                                     onClick={onCancel}
                                     className="w-full py-4 text-red-500 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 bg-red-50 dark:bg-red-900/10 rounded-2xl active:scale-95 transition-transform"
                                 >
-                                    <X size={18} /> Cancel {rideType === 'DELIVERY' ? 'Delivery' : 'Ride'}
+                                    <X size={18} /> Cancel {rideType === 'PASSENGER' ? 'Ride' : 'Delivery'}
                                 </button>
                             )}
                         </div>
