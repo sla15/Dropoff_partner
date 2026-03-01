@@ -287,12 +287,12 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             const batchId = order.batch_id;
 
-            // 2. Fetch all orders in this batch that are 'ready' or already 'delivering'
+            // 2. Fetch all orders in this batch (except cancelled) to ensure full route and total cash
             const { data: batchOrders } = await supabase
                 .from('orders')
                 .select('*, businesses(*)')
                 .eq('batch_id', batchId)
-                .in('status', ['ready', 'delivering', 'preparing', 'accepted']);
+                .neq('status', 'cancelled');
 
             // 3. Calculate Total Cash Upfront (sum of order item totals)
             const totalCashUpfront = batchOrders?.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0) || parseFloat(order.total_amount);
