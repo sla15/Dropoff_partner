@@ -286,7 +286,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (activeRide.batch_id) {
                     const { data: batchOrders } = await supabase
                         .from('orders')
-                        .select('total_amount, business_id, businesses(name, payment_phone, location_address, image_url)')
+                        .select('total_amount, business_id, status, businesses(name, payment_phone, location_address, image_url, lat, lng)')
                         .eq('batch_id', activeRide.batch_id)
                         .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
 
@@ -300,7 +300,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                                     phone: b?.payment_phone || '',
                                     address: b?.location_address || '',
                                     image: b?.image_url || null,
-                                    amount: 0
+                                    lat: b?.lat,
+                                    lng: b?.lng,
+                                    amount: 0,
+                                    isReady: ['ready', 'delivering', 'arrived', 'completed'].includes(bo.status)
                                 };
                             }
                             mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
@@ -326,7 +329,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                                 name: parsed?.business_name || parsed?.name || 'Shop',
                                 phone: parsed?.payment_phone || parsed?.phone || '',
                                 address: parsed?.business_address || parsed?.address || '',
-                                amount: parsed?.estimated_cash || 0
+                                amount: parsed?.estimated_cash || 0,
+                                lat: parsed?.lat,
+                                lng: parsed?.lng,
+                                isReady: ['ready', 'delivering', 'arrived', 'completed'].includes(parsed?.status)
                             };
                         });
                     }

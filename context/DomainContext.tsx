@@ -279,7 +279,7 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // 1. Fetch Order and its Batch info
             const { data: order, error: orderErr } = await supabase
                 .from('orders')
-                .select('*, businesses(*)')
+                .select('*, businesses(id, name, location_address, payment_phone, phone, lat, lng)')
                 .eq('id', orderId)
                 .single();
 
@@ -298,7 +298,7 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             if (batchId) {
                 const { data } = await supabase
                     .from('orders')
-                    .select('*, businesses(*)')
+                    .select('*, businesses(id, name, location_address, payment_phone, phone, lat, lng)')
                     .eq('batch_id', batchId)
                     .neq('status', 'cancelled');
                 if (data) batchOrders = data;
@@ -310,10 +310,12 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             // 4. Collect all pickup stops with names and addresses
             const merchants = batchOrders?.map(o => ({
                 id: o.business_id,
-                name: o.businesses?.name || 'Shop',
-                address: o.businesses?.location_address || '',
+                name: (o.businesses as any)?.name || 'Shop',
+                address: (o.businesses as any)?.location_address || '',
                 amount: parseFloat(o.total_amount || '0'),
-                phone: o.businesses?.payment_phone || o.businesses?.phone || '',
+                phone: (o.businesses as any)?.payment_phone || (o.businesses as any)?.phone || '',
+                lat: (o.businesses as any)?.lat,
+                lng: (o.businesses as any)?.lng,
                 status: o.status
             })) || [];
 
@@ -323,6 +325,8 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 business_address: m.address,
                 business_phone: m.phone,
                 estimated_cash: m.amount,
+                lat: m.lat,
+                lng: m.lng,
                 status: m.status
             }));
 
