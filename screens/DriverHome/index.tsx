@@ -279,16 +279,18 @@ export const DriverHome: React.FC = () => {
                             if (data && !data.success) throw new Error(data.error || 'Failed to cancel');
                         } catch (error: any) {
                             console.error('Cancellation error:', error);
-                            pushNotification('Sync Error', 'Failed to cancel trip.', 'SYSTEM');
-                            return;
+                            // We still proceed to clear local state to un-stuck the UI
                         }
                         const isDelivery = currentRide.type === 'DELIVERY' || isMerchant;
                         notifyCustomer(isDelivery ? 'Delivery Update' : 'Ride Cancelled', isMerchant ? 'Driver unassigned. Searching for a new one.' : 'Driver had to cancel.');
                         pushNotification(isDelivery ? 'Delivery Cancelled' : 'Trip Cancelled', 'Status changed to cancelled.', 'SYSTEM');
+
+                        // CLEAR ALL STATE TO RESET UI
                         setCurrentRide(null);
                         setIncomingRides([]);
                         setRideStatus('IDLE');
                         setIsDrawerExpanded(false);
+                        setSelectedMarkerInfo(null);
                     }}
                     isProcessing={isProcessing}
                     onArrived={handleArrivedAtPickup}
