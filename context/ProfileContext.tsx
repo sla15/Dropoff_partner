@@ -4,6 +4,7 @@ import { INITIAL_PROFILE } from '../data/dummyData';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { useUI } from './UIContext';
+import { useDomain } from './DomainContext';
 import { initFCM } from '../utils/fcm';
 import type { User } from '@supabase/supabase-js';
 
@@ -72,6 +73,19 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         multiplier_premium: 1.5,
         currency_symbol: 'D'
     });
+
+    const { currentRide, setCurrentRide } = useDomain() || {};
+
+    const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371; // km
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    };
 
     const uploadFile = async (file: File, bucketOverride?: string, path?: string): Promise<string | null> => {
         try {
@@ -539,16 +553,278 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         const driverVehicleType = profile.vehicle?.type;
 
-        const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-            const R = 6371; // km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c;
+        const channel = supabase
+            .channel('public:rides_dispatch')
+            .on('postgres_changes', {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'rides'
+            }, (payload) => {
+                console.log("[ProfileContext] Realtime INSERT payload:", payload);
+                const newRide = payload.new;
+
+                if (newRide.status !== 'searching') {
+                    console.log("[ProfileContext] Ignoring non-searching ride");
+                    return;
+                }
+
+                const rideVehicleTypeMapping: Record<string, string> = {
+                    'scooter': 'SCOOTER_TUKTUK',
+                    'economic': 'ECONOMIC',
+                    'premium': 'PREMIUM'
+                };
+                const rideType = rideVehicleTypeMapping[newRide.requested_vehicle_type] || 'ECONOMIC';
+
+                const isEligibleForDelivery = newRide.type === 'DELIVERY' || newRide.type === 'MERCHANT_DELIVERY' || newRide.ride_type === 'MERCHANT_DELIVERY';
+
+                const estCommission = (parseFloat(newRide.price || '0') * appSettings.commission_percentage) / 100;
+                const currentProfile = profileRef.current;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const currentDriverVehicleType = currentProfile.vehicle?.type;
+
+                if (!rejectedRideIdsRef.current.has(newRide.id) && !isOverDebtLimit && (rideType === currentDriverVehicleType || isEligibleForDelivery)) {
+                    handleNewRide(newRide);
+                } else if (isOverDebtLimit && isEligibleForDelivery) {
+                    console.log("[ProfileContext] Ride blocked due to debt debt:", currentProfile.commissionDebt);
+                }
+            })
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'rides'
+            }, (payload) => {
+                const updatedRide = payload.new;
+                // If the updated ride is no longer searching, remove it from the queue
+                if (updatedRide.status !== 'searching') {
+                    setIncomingRides(prev => prev.filter(r => r.id !== updatedRide.id));
+                } else {
+                    // If it's still searching, check if we should show it (maybe it's a batch update)
+                    const estCommission = (parseFloat(updatedRide.price || '0') * appSettings.commission_percentage) / 100;
+                    const currentProfile = profileRef.current;
+                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+
+                    if (!rejectedRideIdsRef.current.has(updatedRide.id) && !isOverDebtLimit) {
+                        handleNewRide(updatedRide); // This will now update the ride if it exists
+                    }
+                }
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    fetchPendingRides();
+                }
+                if (status === 'CHANNEL_ERROR') {
+                    console.error('Realtime channel error - connection may be unstable');
+                }
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
         };
+    }, [user, role, profile.isOnline, profile.vehicle?.type]);
+
+    // Listener for active ride order status changes (to update Yellow/Green dots)
+    useEffect(() => {
+        if (!user || role !== 'DRIVER' || !currentRide?.batch_id) return;
+
+        const channel = supabase
+            .channel(`active_ride_orders_${currentRide.batch_id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'orders',
+                filter: `batch_id=eq.${currentRide.batch_id}`
+            }, async () => {
+                // When any order in the batch is updated, refresh the merchants data for the current ride
+                handleNewRide(currentRide);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, role, currentRide?.batch_id, currentRide?.id]);
+
+    const fetchPendingRides = async () => {
+        const driverVehicleType = profile.vehicle?.type;
+        const dbVehicleMapping: Record<string, string> = {
+            'SCOOTER_TUKTUK': 'scooter',
+            'ECONOMIC': 'economic',
+            'PREMIUM': 'premium'
+        };
+        const dbType = dbVehicleMapping[driverVehicleType || 'ECONOMIC'] || 'economic';
+
+        // Query for rides matching vehicle type OR any delivery ride
+        const isDeliveryEligible = true; // All vehicles now eligible for delivery
+
+        let query = supabase
+            .from('rides')
+            .select('*')
+            .eq('status', 'searching');
+
+        if (isDeliveryEligible) {
+            // If delivery eligible, show rides of their type OR any delivery ride
+            query = query.or(`requested_vehicle_type.eq.${dbType},type.eq.DELIVERY,type.eq.MERCHANT_DELIVERY,ride_type.eq.MERCHANT_DELIVERY`);
+        } else {
+            query = query.eq('requested_vehicle_type', dbType);
+        }
+
+        const { data: pendingRides } = await query
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        if (pendingRides && pendingRides.length > 0) {
+            pendingRides.forEach(ride => {
+                const estCommission = (parseFloat(ride.price || '0') * appSettings.commission_percentage) / 100;
+                const currentProfile = profileRef.current;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+
+                if (!rejectedRideIdsRef.current.has(ride.id) && !isOverDebtLimit) {
+                    handleNewRide(ride);
+                }
+            });
+        }
+    };
+
+    const handleNewRide = (newRide: any) => {
+        console.log("[ProfileContext] handleNewRide started for:", newRide.id);
+        const startTime = new Date().getTime();
+
+        // Interval to check distance with expanding radius
+        const checkInterval = setInterval(async () => {
+            const currentProfile = profileRef.current;
+            const lat = currentProfile.currentLat || 50.110924;
+            const lng = currentProfile.currentLng || 8.682127;
+
+            // Check if ride is still available
+            const { data: currentRideStatus } = await supabase.from('rides').select('status').eq('id', newRide.id).single();
+            if (currentRideStatus?.status !== 'searching') {
+                clearInterval(checkInterval);
+                return;
+            }
+
+            const distance = calculateDistance(lat, lng, newRide.pickup_lat, newRide.pickup_lng);
+            const elapsedSeconds = (new Date().getTime() - startTime) / 1000;
+            const dynamicRadius = 99999; // Massively expand for testing
+
+            if (distance <= dynamicRadius) {
+                const fetchPassenger = async () => {
+                    const { data: userData } = await supabase
+                        .from('profiles')
+                        .select('full_name, avatar_url, average_rating, phone')
+                        .eq('id', newRide.customer_id)
+                        .single();
+
+                    let merchants: any[] = [];
+                    if (newRide.batch_id) {
+                        const { data: batchOrders } = await supabase
+                            .from('orders')
+                            .select('status, total_amount, business_id, businesses(name, payment_phone, location_address, logo_url, lat, lng)')
+                            .eq('batch_id', newRide.batch_id)
+                            .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
+
+                        if (batchOrders) {
+                            const mGrouped: Record<string, any> = {};
+                            batchOrders.forEach(bo => {
+                                const b = bo.businesses as any;
+                                if (!mGrouped[bo.business_id]) {
+                                    mGrouped[bo.business_id] = {
+                                        id: bo.business_id,
+                                        name: b?.name || 'Shop',
+                                        phone: b?.business_phone || '',
+                                        address: b?.location_address || '',
+                                        image: b?.logo_url || null,
+                                        lat: b?.lat,
+                                        lng: b?.lng,
+                                        amount: 0,
+                                        isReady: true
+                                    };
+                                }
+                                mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
+                                if (!['ready', 'arrived', 'delivering'].includes(bo.status)) {
+                                    mGrouped[bo.business_id].isReady = false;
+                                }
+                            });
+                            merchants = Object.values(mGrouped);
+                        }
+                    } else if (newRide.stops && (newRide.type === 'MERCHANT_DELIVERY' || newRide.ride_type === 'MERCHANT_DELIVERY')) {
+                        const stopsData = typeof newRide.stops === 'string' ? JSON.parse(newRide.stops) : newRide.stops;
+                        if (Array.isArray(stopsData)) {
+                            merchants = stopsData.map((s: any) => {
+                                let parsed = s;
+                                if (typeof s === 'string') {
+                                    try { parsed = JSON.parse(s); } catch (e) { parsed = { business_address: s }; }
+                                }
+                                return {
+                                    name: parsed?.business_name || parsed?.name || 'Shop',
+                                    phone: parsed?.business_phone || parsed?.phone || parsed?.payment_phone || '',
+                                    address: parsed?.business_address || parsed?.address || '',
+                                    image: parsed?.business_image || parsed?.logo_url || null,
+                                    lat: parsed?.lat,
+                                    lng: parsed?.lng,
+                                    amount: parsed?.estimated_cash || 0,
+                                    isReady: ['ready', 'arrived', 'delivering'].includes(parsed?.status || 'ready')
+                                };
+                            });
+                        }
+                    }
+
+                    const rideToAdd = {
+                        id: newRide.id,
+                        customer_id: newRide.customer_id,
+                        passengerName: userData?.full_name || 'New Request',
+                        passengerPhone: userData?.phone,
+                        passengerImage: userData?.avatar_url,
+                        passengerRating: userData?.average_rating || 5.0,
+                        rating: userData?.average_rating || 5.0,
+                        rideCount: 124,
+                        pickupDistance: `${distance.toFixed(1)} km`,
+                        destination: newRide.dropoff_address,
+                        price: parseFloat(newRide.price),
+                        pickupLocation: newRide.pickup_address,
+                        pickup_lat: newRide.pickup_lat,
+                        pickup_lng: newRide.pickup_lng,
+                        dropoff_lat: newRide.dropoff_lat,
+                        dropoff_lng: newRide.dropoff_lng,
+                        type: newRide.type,
+                        created_at: newRide.created_at,
+                        total_cash_upfront: newRide.total_cash_upfront,
+                        stops: newRide.stops,
+                        merchants: merchants,
+                        merchantPhone: merchants[0]?.phone,
+                        businessName: merchants[0]?.name,
+                        dbStatus: newRide.status,
+                        status: newRide.status,
+                        batch_id: newRide.batch_id
+                    } as any;
+
+                    setIncomingRides(prev => {
+                        const existingIndex = prev.findIndex(r => r.id === rideToAdd.id);
+                        if (existingIndex !== -1) {
+                            const updated = [...prev];
+                            updated[existingIndex] = rideToAdd;
+                            return updated;
+                        }
+                        return [...prev, rideToAdd];
+                    });
+
+                    // IMPORTANT: Also update currentRide if this IS the active ride
+                    if (currentRide?.id === rideToAdd.id) {
+                        setCurrentRide(rideToAdd);
+                    }
+                };
+
+                fetchPassenger();
+                clearInterval(checkInterval);
+            }
+
+            if (elapsedSeconds > 60) clearInterval(checkInterval);
+        }, 2000);
+    };
+
+    useEffect(() => {
+        if (!user || role !== 'DRIVER' || !profile.isOnline) return;
+
+        const driverVehicleType = profile.vehicle?.type;
 
         const channel = supabase
             .channel('public:rides_dispatch')
@@ -601,7 +877,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
 
                     if (!rejectedRideIdsRef.current.has(updatedRide.id) && !isOverDebtLimit) {
-                        handleNewRide(updatedRide);
+                        handleNewRide(updatedRide); // This will now update the ride if it exists
                     }
                 }
             })
@@ -614,197 +890,32 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             });
 
-        const fetchPendingRides = async () => {
-            const driverVehicleType = profile.vehicle?.type;
-            const dbVehicleMapping: Record<string, string> = {
-                'SCOOTER_TUKTUK': 'scooter',
-                'ECONOMIC': 'economic',
-                'PREMIUM': 'premium'
-            };
-            const dbType = dbVehicleMapping[driverVehicleType || 'ECONOMIC'] || 'economic';
-
-            // Query for rides matching vehicle type OR any delivery ride
-            const isDeliveryEligible = true; // All vehicles now eligible for delivery
-
-            let query = supabase
-                .from('rides')
-                .select('*')
-                .eq('status', 'searching');
-
-            if (isDeliveryEligible) {
-                // If delivery eligible, show rides of their type OR any delivery ride
-                query = query.or(`requested_vehicle_type.eq.${dbType},type.eq.DELIVERY,type.eq.MERCHANT_DELIVERY,ride_type.eq.MERCHANT_DELIVERY`);
-            } else {
-                query = query.eq('requested_vehicle_type', dbType);
-            }
-
-            const { data: pendingRides } = await query
-                .order('created_at', { ascending: false })
-                .limit(10);
-
-            if (pendingRides && pendingRides.length > 0) {
-                pendingRides.forEach(ride => {
-                    const estCommission = (parseFloat(ride.price || '0') * appSettings.commission_percentage) / 100;
-                    const currentProfile = profileRef.current;
-                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
-
-                    if (!rejectedRideIdsRef.current.has(ride.id) && !isOverDebtLimit) {
-                        handleNewRide(ride);
-                    }
-                });
-            }
-        };
-
-        const handleNewRide = (newRide: any) => {
-            console.log("[ProfileContext] handleNewRide started for:", newRide.id);
-            const startTime = new Date().getTime();
-
-            // Interval to check distance with expanding radius
-            const checkInterval = setInterval(async () => {
-                const currentProfile = profileRef.current;
-                // Default fallback location for testing if geolocation fails
-                const lat = currentProfile.currentLat || 50.110924; // Frankfurt fallback
-                const lng = currentProfile.currentLng || 8.682127;
-
-                // Check if ride is still available
-                const { data: currentRideStatus } = await supabase.from('rides').select('status').eq('id', newRide.id).single();
-                if (currentRideStatus?.status !== 'searching') {
-                    clearInterval(checkInterval);
-                    return;
-                }
-
-                const distance = calculateDistance(
-                    lat,
-                    lng,
-                    newRide.pickup_lat,
-                    newRide.pickup_lng
-                );
-
-                const elapsedSeconds = (new Date().getTime() - startTime) / 1000;
-                // For testing purposes, we expand the radius massively to ensure the driver receives the ride instantly regardless of testing distance
-                const dynamicRadius = 99999;
-
-                if (distance <= dynamicRadius) {
-                    // Fetch real passenger data
-                    const fetchPassenger = async () => {
-                        const { data: userData } = await supabase
-                            .from('profiles')
-                            .select('full_name, avatar_url, average_rating, phone')
-                            .eq('id', newRide.customer_id)
-                            .single();
-
-                        let merchants: any[] = [];
-                        if (newRide.batch_id) {
-                            const { data: batchOrders } = await supabase
-                                .from('orders')
-                                .select('status, total_amount, business_id, businesses(name, payment_phone, location_address, logo_url, lat, lng)')
-                                .eq('batch_id', newRide.batch_id)
-                                .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
-
-                            if (batchOrders) {
-                                const mGrouped: Record<string, any> = {};
-                                batchOrders.forEach(bo => {
-                                    const b = bo.businesses as any;
-                                    if (!mGrouped[bo.business_id]) {
-                                        mGrouped[bo.business_id] = {
-                                            id: bo.business_id,
-                                            name: b?.name || 'Shop',
-                                            phone: b?.business_phone || '',
-                                            address: b?.location_address || '',
-                                            image: b?.logo_url || null,
-                                            lat: b?.lat,
-                                            lng: b?.lng,
-                                            amount: 0,
-                                            isReady: true // Assume ready, then check
-                                        };
-                                    }
-                                    mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
-                                    // If any order in the batch for this business is NOT ready (or further along), the shop is not ready
-                                    if (!['ready', 'arrived', 'delivering'].includes(bo.status)) {
-                                        mGrouped[bo.business_id].isReady = false;
-                                    }
-                                });
-                                merchants = Object.values(mGrouped);
-                            }
-                        } else if (newRide.stops && (newRide.type === 'MERCHANT_DELIVERY' || newRide.ride_type === 'MERCHANT_DELIVERY')) {
-                            // Fallback for single orders: use the stops column
-                            const stopsData = typeof newRide.stops === 'string' ? JSON.parse(newRide.stops) : newRide.stops;
-                            if (Array.isArray(stopsData)) {
-                                merchants = stopsData.map((s: any) => {
-                                    let parsed = s;
-                                    if (typeof s === 'string') {
-                                        try {
-                                            parsed = JSON.parse(s);
-                                        } catch (e) {
-                                            parsed = { business_address: s };
-                                        }
-                                    }
-                                    return {
-                                        name: parsed?.business_name || parsed?.name || 'Shop',
-                                        phone: parsed?.business_phone || parsed?.phone || parsed?.payment_phone || '',
-                                        address: parsed?.business_address || parsed?.address || '',
-                                        image: parsed?.business_image || parsed?.logo_url || null,
-                                        lat: parsed?.lat,
-                                        lng: parsed?.lng,
-                                        amount: parsed?.estimated_cash || 0,
-                                        isReady: ['ready', 'arrived', 'delivering'].includes(parsed?.status || 'ready')
-                                    }
-                                });
-                            }
-                        }
-
-                        const rideToAdd = {
-                            id: newRide.id,
-                            customer_id: newRide.customer_id,
-                            passengerName: userData?.full_name || 'New Request',
-                            passengerPhone: userData?.phone,
-                            passengerImage: userData?.avatar_url,
-                            passengerRating: userData?.average_rating || 5.0,
-                            rating: userData?.average_rating || 5.0,
-                            rideCount: 124,
-                            pickupDistance: `${distance.toFixed(1)} km`,
-                            destination: newRide.dropoff_address,
-                            price: parseFloat(newRide.price),
-                            pickupLocation: newRide.pickup_address,
-                            pickup_lat: newRide.pickup_lat,
-                            pickup_lng: newRide.pickup_lng,
-                            dropoff_lat: newRide.dropoff_lat,
-                            dropoff_lng: newRide.dropoff_lng,
-                            type: newRide.type,
-                            created_at: newRide.created_at,
-                            total_cash_upfront: newRide.total_cash_upfront,
-                            stops: newRide.stops,
-                            merchants: merchants,
-                            merchantPhone: merchants[0]?.phone,
-                            businessName: merchants[0]?.name,
-                            dbStatus: newRide.status,
-                            status: newRide.status
-                        } as any;
-
-                        setIncomingRides(prev => {
-                            if (prev.some(r => r.id === rideToAdd.id)) return prev;
-                            // Add new rides at the end, but they are shown FIFO in the UI
-                            return [...prev, rideToAdd];
-                        });
-                    };
-
-                    fetchPassenger();
-                    clearInterval(checkInterval);
-                }
-
-                // Stop checking after 60 seconds (dispatch timeout)
-                if (elapsedSeconds > 60) clearInterval(checkInterval);
-            }, 2000);
-        };
-
         return () => {
-            try {
-                supabase.removeChannel(channel);
-            } catch (error) {
-                console.error('Error removing channel:', error);
-            }
+            supabase.removeChannel(channel);
         };
     }, [user, role, profile.isOnline, profile.vehicle?.type]);
+
+    // Listener for active ride order status changes (to update Yellow/Green dots)
+    useEffect(() => {
+        if (!user || role !== 'DRIVER' || !currentRide?.batch_id) return;
+
+        const channel = supabase
+            .channel(`active_ride_orders_${currentRide.batch_id}`)
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'orders',
+                filter: `batch_id=eq.${currentRide.batch_id}`
+            }, async () => {
+                // When any order in the batch is updated, refresh the merchants data for the current ride
+                handleNewRide(currentRide);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, role, currentRide?.batch_id, currentRide?.id]);
 
     const completeOnboarding = async (targetProfile?: UserProfile) => {
         // Fix for TypeError: merge with current profile to ensure 'documents' and other required fields exist

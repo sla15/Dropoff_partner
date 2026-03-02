@@ -103,6 +103,7 @@ export const useDriverMap = (
                     map: googleMapInstance.current,
                     preserveViewport: true,
                     suppressMarkers: true,
+                    markerOptions: { visible: false },
                     polylineOptions: { strokeColor: '#00E39A', strokeWeight: 6, strokeOpacity: 0.9 }
                 });
             }
@@ -185,41 +186,92 @@ export const useDriverMap = (
 
         animationFrameId = requestAnimationFrame(animateMarker);
 
+        const isMerchant = currentRide && (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY');
         const shouldShowPassenger = currentRide && (rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED');
-        if (shouldShowPassenger && currentRide.pickup_lat && currentRide.pickup_lng) {
-            const passengerPos = { lat: currentRide.pickup_lat, lng: currentRide.pickup_lng };
-            const isMerchant = currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY';
 
-            const renderPassengerContent = () => {
-                const wrapper = document.createElement('div');
-                const hasImage = isMerchant ? !!currentRide.merchants?.[0]?.image : !!currentRide.passengerImage;
-                const imgUrl = isMerchant ? currentRide.merchants?.[0]?.image : currentRide.passengerImage;
+        if (shouldShowPassenger) {
+            if (isMerchant) {
+                // MERCHANT DELIVERY: Show all shop markers
+                const merchants = currentRide.merchants || [];
 
-                if (isMerchant) {
-                    wrapper.innerHTML = `
-                      <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3)); cursor: pointer;">
-                        <div style="width: 48px; height: 48px; background: white; border: 3px solid #10B981; border-radius: 50%; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center; ${!hasImage ? 'box-shadow: 0 0 15px #10B981;' : ''}">
-                           ${hasImage
-                            ? `<img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;" />`
-                            : `<div style="width: 20px; height: 20px; background: #10B981; border-radius: 50%; animation: pulse 2s infinite;"></div>`
-                        }
+                // Cleanup existing Shop and Passenger markers
+                if (passengerMarker.current) {
+                    passengerMarker.current.map = null;
+                    passengerMarker.current = null;
+                }
+                shopMarkers.current.forEach(m => m.map = null);
+                shopMarkers.current = [];
+
+                merchants.forEach((m: any) => {
+                    if (!m.lat || !m.lng) return;
+
+                    const pos = { lat: m.lat, lng: m.lng };
+                    const color = m.isReady ? '#10B981' : '#FBBF24';
+
+                    const dotWrapper = document.createElement('div');
+                    dotWrapper.innerHTML = `
+                        <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.2)); cursor: pointer;">
+                            <div style="width: 24px; height: 24px; background: white; border: 3px solid ${color}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                                <div style="width: 10px; height: 10px; background: ${color}; border-radius: 50%; ${m.isReady ? '' : 'animation: pulseYellow 2s infinite;'}"></div>
+                            </div>
+                            <style>
+                                @keyframes pulseYellow {
+                                    0% { transform: scale(0.9); opacity: 0.7; }
+                                    50% { transform: scale(1.1); opacity: 1; }
+                                    100% { transform: scale(0.9); opacity: 0.7; }
+                                }
+                            </style>
                         </div>
-                        <style>
-                          @keyframes pulse {
-                            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-                            70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-                            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-                          }
-                        </style>
-                      </div>
                     `;
-                } else {
+
+                    const marker = new google.maps.marker.AdvancedMarkerElement({
+                        position: pos,
+                        map: googleMapInstance.current,
+                        content: dotWrapper,
+                        zIndex: 90,
+                        title: m.name
+                    });
+
+                    marker.addEventListener('gmp-click', () => {
+                        if (infoWindowRef.current) infoWindowRef.current.close();
+                        infoWindowRef.current = new google.maps.InfoWindow({
+                            content: `<div style="padding: 10px; font-family: sans-serif; min-width: 120px;">
+                                        <div style="font-weight: 800; font-size: 14px; color: #111; margin-bottom: 4px;">${m.name}</div>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                          <div style="width: 8px; height: 8px; background: ${color}; border-radius: 50%;"></div>
+                                          <span style="font-size: 12px; font-weight: 600; color: ${color};">${m.isReady ? 'Ready for Pickup' : 'Still Preparing'}</span>
+                                        </div>
+                                      </div>`
+                        });
+                        infoWindowRef.current.open(googleMapInstance.current, marker);
+                    });
+
+                    shopMarkers.current.push(marker);
+                });
+
+                // Fit bounds to show all shops and driver
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend(new google.maps.LatLng(profile.currentLat, profile.currentLng));
+                merchants.forEach((m: any) => {
+                    if (m.lat && m.lng) bounds.extend(new google.maps.LatLng(m.lat, m.lng));
+                });
+                googleMapInstance.current.fitBounds(bounds, { top: 100, bottom: 300, left: 50, right: 50 });
+
+            } else if (currentRide.pickup_lat && currentRide.pickup_lng) {
+                // REGULAR RIDE/DELIVERY: Show single pickup marker
+                const passengerPos = { lat: currentRide.pickup_lat, lng: currentRide.pickup_lng };
+
+                const renderPassengerContent = () => {
+                    const wrapper = document.createElement('div');
+                    const hasImage = !!currentRide.passengerImage;
+                    const imgUrl = currentRide.passengerImage;
+
                     wrapper.innerHTML = `
                       <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.3));">
-                        <div style="width: 44px; height: 44px; background: white; border: 3px solid #10B981; border-radius: 50%; overflow: hidden; position: relative; display: flex; items-center; justify-center;">
+                        <div style="width: 44px; height: 44px; background: white; border: 3px solid #10B981; border-radius: 50%; overflow: hidden; position: relative; display: flex; align-items: center; justify-content: center;">
                            ${hasImage
                             ? `<img src="${imgUrl}" style="width: 100%; height: 100%; object-fit: cover;" />`
-                            : `<div style="width: 100%; height: 100%; background: #10B981; display: flex; align-items: center; justify-center;">
+                            : `<div style="width: 100%; height: 100%; background: #10B981; display: flex; align-items: center; justify-content: center;">
                               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path>
                                 <circle cx="12" cy="10" r="3"></circle>
@@ -231,98 +283,27 @@ export const useDriverMap = (
                         <div style="width: 12px; height: 12px; background: #10B981; border-radius: 50%; margin-top: -6px; border: 3px solid white; box-shadow: 0 4px 8px rgba(0,0,0,0.2);"></div>
                       </div>
                     `;
-                }
-                return wrapper;
-            };
+                    return wrapper;
+                };
 
-            if (!passengerMarker.current) {
-                passengerMarker.current = new google.maps.marker.AdvancedMarkerElement({
-                    position: passengerPos,
-                    map: googleMapInstance.current,
-                    content: renderPassengerContent(),
-                    zIndex: 90
-                });
-
-                if (rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED') {
-                    const bounds = new google.maps.LatLngBounds();
-                    bounds.extend(new google.maps.LatLng(profile.currentLat, profile.currentLng));
-                    bounds.extend(new google.maps.LatLng(passengerPos.lat, passengerPos.lng));
-                    googleMapInstance.current.fitBounds(bounds, { top: 100, bottom: 300, left: 50, right: 50 });
-                }
-            } else {
-                passengerMarker.current.position = passengerPos;
-                passengerMarker.current.content = renderPassengerContent();
-                passengerMarker.current.map = googleMapInstance.current;
-            }
-        } else if (currentRide && (rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED') && (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY')) {
-            const google = (window as any).google;
-            const merchants = currentRide.merchants || [];
-
-            // Cleanup old shop markers
-            shopMarkers.current.forEach(m => m.map = null);
-            shopMarkers.current = [];
-
-            merchants.forEach((m: any) => {
-                if (!m.lat || !m.lng) return;
-
-                const pos = { lat: m.lat, lng: m.lng };
-                const color = m.isReady ? '#10B981' : '#FBBF24'; // Green if ready, Yellow if not
-
-                const dotWrapper = document.createElement('div');
-                dotWrapper.innerHTML = `
-                  <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.2)); cursor: pointer;">
-                    <div style="width: 24px; height: 24px; background: white; border: 3px solid ${color}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                      <div style="width: 10px; height: 10px; background: ${color}; border-radius: 50%; ${m.isReady ? '' : 'animation: pulseYellow 2s infinite;'}"></div>
-                    </div>
-                    ${!m.isReady ? `
-                    <style>
-                      @keyframes pulseYellow {
-                        0% { transform: scale(0.9); opacity: 0.7; }
-                        50% { transform: scale(1.1); opacity: 1; }
-                        100% { transform: scale(0.9); opacity: 0.7; }
-                      }
-                    </style>` : ''}
-                  </div>
-                `;
-
-                const marker = new google.maps.marker.AdvancedMarkerElement({
-                    position: pos,
-                    map: googleMapInstance.current,
-                    content: dotWrapper,
-                    zIndex: 90,
-                    title: m.name
-                });
-
-                marker.addListener('click', () => {
-                    if (infoWindowRef.current) infoWindowRef.current.close();
-                    infoWindowRef.current = new google.maps.InfoWindow({
-                        content: `<div style="padding: 10px; font-family: sans-serif; min-width: 120px;">
-                                    <div style="font-weight: 800; font-size: 14px; color: #111; margin-bottom: 4px;">${m.name}</div>
-                                    <div style="display: flex; align-items: center; gap: 6px;">
-                                      <div style="width: 8px; height: 8px; background: ${color}; border-radius: 50%;"></div>
-                                      <span style="font-size: 12px; font-weight: 600; color: ${color};">${m.isReady ? 'Ready for Pickup' : 'Still Preparing'}</span>
-                                    </div>
-                                  </div>`
+                if (!passengerMarker.current) {
+                    passengerMarker.current = new google.maps.marker.AdvancedMarkerElement({
+                        position: passengerPos,
+                        map: googleMapInstance.current,
+                        content: renderPassengerContent(),
+                        zIndex: 90
                     });
-                    infoWindowRef.current.open(googleMapInstance.current, marker);
-                });
+                } else {
+                    passengerMarker.current.position = passengerPos;
+                    passengerMarker.current.content = renderPassengerContent();
+                    passengerMarker.current.map = googleMapInstance.current;
+                }
 
-                shopMarkers.current.push(marker);
-            });
-
-            // Adjust bounds to see all shops and driver
-            if (merchants.length > 0) {
+                // Fit bounds
                 const bounds = new google.maps.LatLngBounds();
                 bounds.extend(new google.maps.LatLng(profile.currentLat, profile.currentLng));
-                merchants.forEach((m: any) => {
-                    if (m.lat && m.lng) bounds.extend(new google.maps.LatLng(m.lat, m.lng));
-                });
+                bounds.extend(new google.maps.LatLng(passengerPos.lat, passengerPos.lng));
                 googleMapInstance.current.fitBounds(bounds, { top: 100, bottom: 300, left: 50, right: 50 });
-            }
-
-            if (passengerMarker.current) {
-                passengerMarker.current.map = null;
-                passengerMarker.current = null;
             }
         } else if (currentRide && rideStatus === 'NAVIGATING' && currentRide.dropoff_lat && currentRide.dropoff_lng) {
             const dropoffPos = { lat: currentRide.dropoff_lat, lng: currentRide.dropoff_lng };
@@ -390,7 +371,7 @@ export const useDriverMap = (
             }
 
             // Task 4: Tap to show name
-            passengerMarker.current.addListener('click', () => {
+            passengerMarker.current.addEventListener('gmp-click', () => {
                 if (infoWindowRef.current) infoWindowRef.current.close();
                 infoWindowRef.current = new google.maps.InfoWindow({
                     content: `<div style="padding: 8px; font-weight: bold; color: #111; font-family: sans-serif;">${currentRide.passengerName}</div>`

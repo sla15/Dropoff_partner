@@ -23,7 +23,7 @@ const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
         accepted: 'Accepted',
         preparing: 'Preparing',
         ready: 'Searching...',
-        delivering: 'Found Driver',
+        delivering: 'Found a driver, they are coming!',
         arrived: 'Driver Arrived',
         completed: 'Completed',
         cancelled: 'Cancelled'
@@ -293,7 +293,7 @@ export const MerchantOrders: React.FC = () => {
                                 {selectedOrder.status === 'delivering' && (
                                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex items-center gap-3">
                                         <Truck className="animate-pulse text-indigo-500" size={20} />
-                                        <p className="text-indigo-600 dark:text-indigo-400 text-sm font-bold">Found a driver, they are coming!</p>
+                                        <p className="text-indigo-600 dark:text-indigo-400 text-sm font-bold">Driver on the way!</p>
                                     </div>
                                 )}
                                 {['delivering', 'arrived', 'ready', 'preparing', 'accepted'].includes(selectedOrder.status) && (

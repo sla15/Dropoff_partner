@@ -92,12 +92,18 @@ export const useRideLifecycle = (
             setRideStatus('ACCEPTED');
 
             // If it's a merchant delivery, sync the associated orders to "delivering"
-            if (currentRide.batch_id && (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY')) {
-                const { error: batchErr } = await supabase
-                    .from('orders')
-                    .update({ status: 'delivering' })
-                    .eq('batch_id', currentRide.batch_id);
-                if (batchErr) console.warn("Could not sync batch orders status:", batchErr);
+            if (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY') {
+                if (currentRide.batch_id) {
+                    await supabase.from('orders')
+                        .update({
+                            status: 'delivering',
+                            driver_id: user.id
+                        })
+                        .eq('batch_id', currentRide.batch_id);
+                } else {
+                    // Fallback for single orders not using batch_id
+                    await supabase.from('orders').update({ status: 'delivering', driver_id: user.id }).eq('id', currentRide.order_id || currentRide.id);
+                }
             }
 
             // REJECT ALL OTHER PENDING REQUESTS IN QUEUE
@@ -125,6 +131,21 @@ export const useRideLifecycle = (
             setRideStatus('ARRIVED');
             setIsDrawerExpanded(false);
             await supabase.from('rides').update({ status: 'arrived' }).eq('id', currentRide.id);
+
+            // Sync associated orders for merchant deliveries
+            if (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY') {
+                if (currentRide.batch_id) {
+                    await supabase.from('orders')
+                        .update({
+                            status: 'arrived',
+                            driver_id: user.id
+                        })
+                        .eq('batch_id', currentRide.batch_id);
+                } else {
+                    await supabase.from('orders').update({ status: 'arrived', driver_id: user.id }).eq('id', currentRide.order_id || currentRide.id);
+                }
+            }
+
             const isDelivery = currentRide.type === 'DELIVERY' || currentRide.type === 'MERCHANT_DELIVERY';
             pushNotification(isDelivery ? 'Delivery Update' : 'You have Arrived', isDelivery ? 'Notify the merchant you are here.' : 'Notify the passenger you are here.', 'SYSTEM');
             notifyCustomer('Driver Arrived', isDelivery ? 'Your driver has arrived at the pickup location!' : 'Your driver has arrived at the pickup location!');
