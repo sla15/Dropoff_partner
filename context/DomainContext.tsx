@@ -384,6 +384,12 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
                 // 6b. If ride is already accepted, notify the driver
                 if (existingRide.driver_id && ['accepted', 'arrived', 'in-progress'].includes(existingRide.status)) {
+                    // Turn this new order to 'delivering' immediately since the driver is already on the way
+                    await supabase.from('orders').update({
+                        status: 'delivering',
+                        driver_id: existingRide.driver_id
+                    }).eq('id', orderId);
+
                     await supabase.functions.invoke('send-fcm-notification', {
                         body: {
                             userIds: [existingRide.driver_id],

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Navigation, Power } from 'lucide-react';
+import { Navigation, Power, X, Store, MapPin, Phone, User } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { RideDrawer } from '../../components/RideDrawer';
 import { supabase } from '../../lib/supabase';
@@ -48,6 +48,7 @@ export const DriverHome: React.FC = () => {
     const [showDirections, setShowDirections] = useState(false);
     const [navigationInfo, setNavigationInfo] = useState({ distance: '...', duration: '...' });
     const [isFollowing, setIsFollowing] = useState(true);
+    const [selectedMarkerInfo, setSelectedMarkerInfo] = useState<any>(null);
 
     const APP_WIDTH = Math.min(window.innerWidth, 448);
     const [dragPos, setDragPos] = useState({ x: APP_WIDTH - 70, y: 100 });
@@ -64,7 +65,8 @@ export const DriverHome: React.FC = () => {
         currentRide,
         isFollowing,
         setIsFollowing,
-        setNavigationInfo
+        setNavigationInfo,
+        setSelectedMarkerInfo
     );
 
     const {
@@ -190,6 +192,44 @@ export const DriverHome: React.FC = () => {
                 submitRating={submitRating}
                 handleSkipRating={handleSkipRating}
             />
+
+            {selectedMarkerInfo && (
+                <div className="absolute top-[15%] left-4 right-4 z-50 bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-gray-800 rounded-2xl shadow-2xl p-5 animate-in slide-in-from-bottom-5">
+                    <button onClick={() => setSelectedMarkerInfo(null)} className="absolute top-3 right-3 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-full text-gray-400 dark:text-gray-300">
+                        <X size={16} />
+                    </button>
+                    {selectedMarkerInfo.type === 'merchant' ? (
+                        <>
+                            <div className="flex items-center gap-3 mb-3 pr-8">
+                                <Store className="text-blue-500 dark:text-blue-400" size={24} />
+                                <h3 className="text-gray-900 dark:text-white font-bold text-lg">{selectedMarkerInfo.title}</h3>
+                            </div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className={`w-2 h-2 rounded-full ${selectedMarkerInfo.isReady ? 'bg-emerald-500' : 'bg-yellow-500 animate-pulse'}`}></div>
+                                <span className={`text-sm font-semibold ${selectedMarkerInfo.isReady ? 'text-emerald-500 dark:text-emerald-400' : 'text-yellow-500 dark:text-yellow-400'}`}>
+                                    {selectedMarkerInfo.isReady ? 'Ready for Pickup' : 'Still Preparing'}
+                                </span>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 mb-1 text-sm flex items-center gap-2"><MapPin size={14} className="shrink-0" /> <span className="truncate">{selectedMarkerInfo.address}</span></p>
+                            <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm flex items-center gap-2"><Phone size={14} className="shrink-0" /> <span>{selectedMarkerInfo.phone}</span></p>
+
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700/50 p-4 flex justify-between items-center">
+                                <span className="text-gray-600 dark:text-gray-300 font-medium text-sm">Amount to pay Merchant</span>
+                                <span className="text-emerald-500 dark:text-emerald-400 font-black text-xl leading-none">D{selectedMarkerInfo.amount}</span>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex items-center gap-3 mb-3 pr-8">
+                                <User className="text-purple-500 dark:text-purple-400" size={24} />
+                                <h3 className="text-gray-900 dark:text-white font-bold text-lg">{selectedMarkerInfo.title}</h3>
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 mb-1 text-sm flex items-center gap-2"><MapPin size={14} className="shrink-0" /> <span className="truncate">{selectedMarkerInfo.address}</span></p>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm flex items-center gap-2"><Phone size={14} className="shrink-0" /> <span>{selectedMarkerInfo.phone || 'No phone provided'}</span></p>
+                        </>
+                    )}
+                </div>
+            )}
 
             {currentRide && !showRatingModal && (
                 <RideDrawer

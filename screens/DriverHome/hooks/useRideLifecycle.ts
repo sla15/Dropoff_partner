@@ -99,10 +99,11 @@ export const useRideLifecycle = (
                             status: 'delivering',
                             driver_id: user.id
                         })
-                        .eq('batch_id', currentRide.batch_id);
+                        .eq('batch_id', currentRide.batch_id)
+                        .in('status', ['ready', 'searching']);
                 } else {
                     // Fallback for single orders not using batch_id
-                    await supabase.from('orders').update({ status: 'delivering', driver_id: user.id }).eq('id', currentRide.order_id || currentRide.id);
+                    await supabase.from('orders').update({ status: 'delivering', driver_id: user.id }).eq('id', currentRide.order_id || currentRide.id).in('status', ['ready', 'searching']);
                 }
             }
 

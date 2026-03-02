@@ -19,7 +19,8 @@ export const useDriverMap = (
     currentRide: any,
     isFollowing: boolean,
     setIsFollowing: (val: boolean) => void,
-    setNavigationInfo: (info: { distance: string; duration: string }) => void
+    setNavigationInfo: (info: { distance: string; duration: string }) => void,
+    onMarkerClick?: (data: any) => void
 ) => {
     const mapRef = useRef<HTMLDivElement>(null);
     const googleMapInstance = useRef<any>(null);
@@ -233,6 +234,17 @@ export const useDriverMap = (
                     });
 
                     marker.addEventListener('gmp-click', () => {
+                        if (onMarkerClick) {
+                            onMarkerClick({
+                                type: 'merchant',
+                                title: m.name,
+                                phone: m.phone,
+                                address: m.address,
+                                amount: m.amount || 0,
+                                isReady: m.isReady
+                            });
+                            return;
+                        }
                         if (infoWindowRef.current) infoWindowRef.current.close();
                         infoWindowRef.current = new google.maps.InfoWindow({
                             content: `<div style="padding: 10px; font-family: sans-serif; min-width: 120px;">
@@ -372,6 +384,15 @@ export const useDriverMap = (
 
             // Task 4: Tap to show name
             passengerMarker.current.addEventListener('gmp-click', () => {
+                if (onMarkerClick) {
+                    onMarkerClick({
+                        type: 'customer',
+                        title: currentRide.passengerName,
+                        phone: currentRide.passengerPhone,
+                        address: currentRide.destination || currentRide.dropoff_address
+                    });
+                    return;
+                }
                 if (infoWindowRef.current) infoWindowRef.current.close();
                 infoWindowRef.current = new google.maps.InfoWindow({
                     content: `<div style="padding: 8px; font-weight: bold; color: #111; font-family: sans-serif;">${currentRide.passengerName}</div>`
@@ -418,16 +439,29 @@ export const useDriverMap = (
         const google = (window as any).google;
         const origin = { lat: profile.currentLat, lng: profile.currentLng };
 
-        // If arrived or navigating, destination is dropoff
-        // If accepted but not arrived, destination is pickup
-        const destLat = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
-            (currentRide.dropoff_lat ?? currentRide.pickup_lat) : currentRide.pickup_lat;
-        const destLng = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
-            (currentRide.dropoff_lng ?? currentRide.pickup_lng) : currentRide.pickup_lng;
+        const isMerchantBatch = (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY') && currentRide.merchants && currentRide.merchants.length > 0;
 
-        const destination = { lat: destLat, lng: destLng };
+        let destination: any = null;
+        let waypoints: any[] = [];
+        let optimizeWaypoints = false;
 
-        if (!destination.lat || !destination.lng) {
+        if (isMerchantBatch && (rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED')) {
+            // Full route: Driver -> Shops -> Customer
+            destination = { lat: currentRide.dropoff_lat, lng: currentRide.dropoff_lng };
+            waypoints = currentRide.merchants.filter((m: any) => m.lat && m.lng).map((m: any) => ({
+                location: { lat: m.lat, lng: m.lng },
+                stopover: true
+            }));
+            optimizeWaypoints = true;
+        } else {
+            const destLat = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
+                (currentRide.dropoff_lat ?? currentRide.pickup_lat) : currentRide.pickup_lat;
+            const destLng = (rideStatus === 'NAVIGATING' || rideStatus === 'ARRIVED') ?
+                (currentRide.dropoff_lng ?? currentRide.pickup_lng) : currentRide.pickup_lng;
+            destination = { lat: destLat, lng: destLng };
+        }
+
+        if (!destination || !destination.lat || !destination.lng) {
             console.warn("🗺️ Map: Skipping directions - destination coords are missing/null", {
                 status: rideStatus,
                 destination,
@@ -439,6 +473,8 @@ export const useDriverMap = (
         directionsService.current.route({
             origin,
             destination,
+            waypoints,
+            optimizeWaypoints,
             travelMode: google.maps.TravelMode.DRIVING,
             provideRouteAlternatives: false,
             unitSystem: google.maps.UnitSystem.METRIC,
