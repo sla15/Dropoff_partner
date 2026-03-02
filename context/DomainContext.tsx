@@ -113,6 +113,11 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                         };
                     })
                 });
+
+                // Recalculate total based purely on item prices (ignoring delivery fees)
+                const lastIdx = ordersWithItems.length - 1;
+                const itemsSubtotal = ordersWithItems[lastIdx].items.reduce((sum, item) => sum + (item.product.price * item.quantity), 0);
+                ordersWithItems[lastIdx].total = itemsSubtotal;
             }
             setMerchantOrders(ordersWithItems);
             console.log(`[DomainContext] Final processed orders: ${ordersWithItems.length}`, ordersWithItems);
@@ -305,19 +310,36 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
 
             // 3. Calculate Total Cash Upfront (sum of order item totals) - Round up to next figure
-            const totalCashUpfront = Math.ceil(batchOrders?.reduce((sum, o) => sum + parseFloat(o.total_amount || '0'), 0) || parseFloat(order.total_amount));
+            // We need to fetch order items for all batch orders to calculate the pure product cost
+            let totalCashUpfront = 0;
+            const merchants = [];
+
+            if (batchOrders) {
+                for (const o of batchOrders) {
+                    const { data: items } = await supabase.from('order_items').select('quantity, products(price)').eq('order_id', o.id);
+                    const orderSubtotal = (items || []).reduce((sum, item: any) => sum + (parseFloat(Array.isArray(item.products) ? item.products[0]?.price : item.products?.price || '0') * item.quantity), 0);
+                    totalCashUpfront += orderSubtotal;
+
+                    merchants.push({
+                        id: o.business_id,
+                        name: (o.businesses as any)?.name || 'Shop',
+                        address: (o.businesses as any)?.location_address || '',
+                        amount: Math.ceil(orderSubtotal), // Store product-only amount for this specific merchant
+                        phone: (o.businesses as any)?.payment_phone || (o.businesses as any)?.phone || '',
+                        lat: (o.businesses as any)?.lat,
+                        lng: (o.businesses as any)?.lng,
+                        status: o.status
+                    });
+                }
+            } else {
+                const { data: items } = await supabase.from('order_items').select('quantity, products(price)').eq('order_id', order.id);
+                totalCashUpfront = (items || []).reduce((sum, item: any) => sum + (parseFloat(Array.isArray(item.products) ? item.products[0]?.price : item.products?.price || '0') * item.quantity), 0);
+            }
+
+            totalCashUpfront = Math.ceil(totalCashUpfront);
 
             // 4. Collect all pickup stops with names and addresses
-            const merchants = batchOrders?.map(o => ({
-                id: o.business_id,
-                name: (o.businesses as any)?.name || 'Shop',
-                address: (o.businesses as any)?.location_address || '',
-                amount: parseFloat(o.total_amount || '0'),
-                phone: (o.businesses as any)?.payment_phone || (o.businesses as any)?.phone || '',
-                lat: (o.businesses as any)?.lat,
-                lng: (o.businesses as any)?.lng,
-                status: o.status
-            })) || [];
+
 
             const stops = merchants.map(m => ({
                 business_id: m.id,

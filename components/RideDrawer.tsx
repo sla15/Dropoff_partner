@@ -151,12 +151,12 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             {(rideStatus === 'RINGING' || rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED' || rideStatus === 'NAVIGATING') ? (
                                 <div className="flex flex-col items-end">
                                     {(rideType === 'DELIVERY' || rideType === 'MERCHANT_DELIVERY') && currentRide.total_cash_upfront ? (
-                                        <div className="mb-2 text-right">
-                                            <div className="text-orange-500 text-sm font-black uppercase tracking-widest leading-none">Cash Needed</div>
-                                            <div className="text-orange-600 dark:text-orange-400 text-2xl font-black">D{Math.ceil(currentRide.total_cash_upfront)}</div>
+                                        <div className="mb-4 w-full flex flex-col items-center justify-center bg-orange-50 dark:bg-orange-950/20 py-3 rounded-2xl border border-orange-100 dark:border-orange-900/30">
+                                            <div className="text-orange-500 text-[10px] font-black uppercase tracking-[0.2em] leading-none mb-1">Needed Cash</div>
+                                            <div className="text-orange-600 dark:text-orange-400 text-3xl font-black">D{Math.ceil(currentRide.total_cash_upfront)}</div>
                                         </div>
                                     ) : null}
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-4 w-full justify-end">
                                         <div className="flex flex-col items-end">
                                             <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1 opacity-60">Reveal fee at completion</span>
                                             <div className="flex items-center gap-1.5">

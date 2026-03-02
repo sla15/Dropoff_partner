@@ -111,7 +111,6 @@ export const DriverWalletView: React.FC = () => {
             {/* History */}
             <div className="px-8 mt-10 mb-6 flex justify-between items-end">
                 <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">My Recent Trips</h3>
-                <button className="text-[#00E39A] text-xs font-black uppercase tracking-widest">View All</button>
             </div>
 
             <div className="px-6 space-y-3 pb-32">
