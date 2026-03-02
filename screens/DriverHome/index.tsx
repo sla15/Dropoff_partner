@@ -202,16 +202,17 @@ export const DriverHome: React.FC = () => {
                     onCancel={async () => {
                         if (!currentRide) return;
                         const originalStatus = rideStatus;
+                        const isMerchant = currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY';
 
-                        if (originalStatus === 'NAVIGATING' && currentRide.pickup_lat && currentRide.pickup_lng && profile.currentLat && profile.currentLng) {
+                        if (!isMerchant && originalStatus === 'NAVIGATING' && currentRide.pickup_lat && currentRide.pickup_lng && profile.currentLat && profile.currentLng) {
                             const actualDist = calculateDistance(currentRide.pickup_lat, currentRide.pickup_lng, profile.currentLat, profile.currentLng);
                             if (actualDist >= 0.05) {
                                 try {
                                     const { data, error } = await supabase.rpc('complete_ride', {
                                         p_ride_id: currentRide.id,
                                         p_driver_id: user?.id,
-                                        p_actual_lat: profile.currentLat,
-                                        p_actual_lng: profile.currentLng,
+                                        p_actual_lat: profile.currentLat || 0,
+                                        p_actual_lng: profile.currentLng || 0,
                                         p_is_auto: false
                                     });
                                     if (error) throw error;
@@ -228,7 +229,6 @@ export const DriverHome: React.FC = () => {
                             }
                         }
 
-                        const isMerchant = currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY';
                         try {
                             if (isMerchant) {
                                 // For merchant deliveries, slide to cancel just releases the driver but keeps request alive

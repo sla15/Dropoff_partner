@@ -272,7 +272,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (activeRide.batch_id) {
                     const { data: batchOrders } = await supabase
                         .from('orders')
-                        .select('total_amount, business_id, businesses(name, payment_phone, location_address)')
+                        .select('total_amount, business_id, businesses(name, business_phone, payment_phone, location_address, logo_url)')
                         .eq('batch_id', activeRide.batch_id)
                         .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
 
@@ -283,8 +283,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                             if (!mGrouped[bo.business_id]) {
                                 mGrouped[bo.business_id] = {
                                     name: b?.name || 'Shop',
-                                    phone: b?.business_phone || '',
+                                    phone: b?.business_phone || b?.payment_phone || '',
                                     address: b?.location_address || '',
+                                    image: b?.logo_url || null,
                                     amount: 0
                                 };
                             }
