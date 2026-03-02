@@ -25,6 +25,7 @@ export const useDriverMap = (
     const googleMapInstance = useRef<any>(null);
     const driverMarker = useRef<any>(null);
     const passengerMarker = useRef<any>(null);
+    const shopMarkers = useRef<any[]>([]);
     const directionsRenderer = useRef<any>(null);
     const directionsService = useRef<any>(null);
     const infoWindowRef = useRef<any>(null);
@@ -253,6 +254,76 @@ export const useDriverMap = (
                 passengerMarker.current.content = renderPassengerContent();
                 passengerMarker.current.map = googleMapInstance.current;
             }
+        } else if (currentRide && (rideStatus === 'ACCEPTED' || rideStatus === 'ARRIVED') && (currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY')) {
+            const google = (window as any).google;
+            const merchants = currentRide.merchants || [];
+
+            // Cleanup old shop markers
+            shopMarkers.current.forEach(m => m.map = null);
+            shopMarkers.current = [];
+
+            merchants.forEach((m: any) => {
+                if (!m.lat || !m.lng) return;
+
+                const pos = { lat: m.lat, lng: m.lng };
+                const color = m.isReady ? '#10B981' : '#FBBF24'; // Green if ready, Yellow if not
+
+                const dotWrapper = document.createElement('div');
+                dotWrapper.innerHTML = `
+                  <div style="display: flex; flex-direction: column; align-items: center; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.2)); cursor: pointer;">
+                    <div style="width: 24px; height: 24px; background: white; border: 3px solid ${color}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                      <div style="width: 10px; height: 10px; background: ${color}; border-radius: 50%; ${m.isReady ? '' : 'animation: pulseYellow 2s infinite;'}"></div>
+                    </div>
+                    ${!m.isReady ? `
+                    <style>
+                      @keyframes pulseYellow {
+                        0% { transform: scale(0.9); opacity: 0.7; }
+                        50% { transform: scale(1.1); opacity: 1; }
+                        100% { transform: scale(0.9); opacity: 0.7; }
+                      }
+                    </style>` : ''}
+                  </div>
+                `;
+
+                const marker = new google.maps.marker.AdvancedMarkerElement({
+                    position: pos,
+                    map: googleMapInstance.current,
+                    content: dotWrapper,
+                    zIndex: 90,
+                    title: m.name
+                });
+
+                marker.addListener('click', () => {
+                    if (infoWindowRef.current) infoWindowRef.current.close();
+                    infoWindowRef.current = new google.maps.InfoWindow({
+                        content: `<div style="padding: 10px; font-family: sans-serif; min-width: 120px;">
+                                    <div style="font-weight: 800; font-size: 14px; color: #111; margin-bottom: 4px;">${m.name}</div>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                      <div style="width: 8px; height: 8px; background: ${color}; border-radius: 50%;"></div>
+                                      <span style="font-size: 12px; font-weight: 600; color: ${color};">${m.isReady ? 'Ready for Pickup' : 'Still Preparing'}</span>
+                                    </div>
+                                  </div>`
+                    });
+                    infoWindowRef.current.open(googleMapInstance.current, marker);
+                });
+
+                shopMarkers.current.push(marker);
+            });
+
+            // Adjust bounds to see all shops and driver
+            if (merchants.length > 0) {
+                const bounds = new google.maps.LatLngBounds();
+                bounds.extend(new google.maps.LatLng(profile.currentLat, profile.currentLng));
+                merchants.forEach((m: any) => {
+                    if (m.lat && m.lng) bounds.extend(new google.maps.LatLng(m.lat, m.lng));
+                });
+                googleMapInstance.current.fitBounds(bounds, { top: 100, bottom: 300, left: 50, right: 50 });
+            }
+
+            if (passengerMarker.current) {
+                passengerMarker.current.map = null;
+                passengerMarker.current = null;
+            }
         } else if (currentRide && rideStatus === 'NAVIGATING' && currentRide.dropoff_lat && currentRide.dropoff_lng) {
             const dropoffPos = { lat: currentRide.dropoff_lat, lng: currentRide.dropoff_lng };
             const isMerchant = currentRide.type === 'MERCHANT_DELIVERY' || currentRide.ride_type === 'MERCHANT_DELIVERY';
@@ -332,9 +403,15 @@ export const useDriverMap = (
             bounds.extend(new google.maps.LatLng(dropoffPos.lat, dropoffPos.lng));
             googleMapInstance.current.fitBounds(bounds, { top: 100, bottom: 300, left: 50, right: 50 });
 
-        } else if (passengerMarker.current) {
-            passengerMarker.current.map = null;
-            passengerMarker.current = null;
+        } else {
+            if (passengerMarker.current) {
+                passengerMarker.current.map = null;
+                passengerMarker.current = null;
+            }
+            if (shopMarkers.current.length > 0) {
+                shopMarkers.current.forEach(m => m.map = null);
+                shopMarkers.current = [];
+            }
         }
 
         const vehicleType = profile.vehicle?.type || 'ECONOMIC';

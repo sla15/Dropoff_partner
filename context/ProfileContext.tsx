@@ -697,7 +697,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         if (newRide.batch_id) {
                             const { data: batchOrders } = await supabase
                                 .from('orders')
-                                .select('total_amount, business_id, businesses(name, payment_phone, location_address, logo_url)')
+                                .select('status, total_amount, business_id, businesses(name, payment_phone, location_address, logo_url, lat, lng)')
                                 .eq('batch_id', newRide.batch_id)
                                 .in('status', ['accepted', 'preparing', 'ready', 'delivering']);
 
@@ -707,14 +707,22 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                                     const b = bo.businesses as any;
                                     if (!mGrouped[bo.business_id]) {
                                         mGrouped[bo.business_id] = {
+                                            id: bo.business_id,
                                             name: b?.name || 'Shop',
                                             phone: b?.business_phone || '',
                                             address: b?.location_address || '',
                                             image: b?.logo_url || null,
-                                            amount: 0
+                                            lat: b?.lat,
+                                            lng: b?.lng,
+                                            amount: 0,
+                                            isReady: true // Assume ready, then check
                                         };
                                     }
                                     mGrouped[bo.business_id].amount += parseFloat(bo.total_amount || '0');
+                                    // If any order in the batch for this business is NOT ready (or further along), the shop is not ready
+                                    if (!['ready', 'arrived', 'delivering'].includes(bo.status)) {
+                                        mGrouped[bo.business_id].isReady = false;
+                                    }
                                 });
                                 merchants = Object.values(mGrouped);
                             }
@@ -736,7 +744,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                                         phone: parsed?.business_phone || parsed?.phone || parsed?.payment_phone || '',
                                         address: parsed?.business_address || parsed?.address || '',
                                         image: parsed?.business_image || parsed?.logo_url || null,
-                                        amount: parsed?.estimated_cash || 0
+                                        lat: parsed?.lat,
+                                        lng: parsed?.lng,
+                                        amount: parsed?.estimated_cash || 0,
+                                        isReady: ['ready', 'arrived', 'delivering'].includes(parsed?.status || 'ready')
                                     }
                                 });
                             }

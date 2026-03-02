@@ -18,10 +18,21 @@ const StatusBadge: React.FC<{ status: OrderStatus }> = ({ status }) => {
 
     const style = styles[status] || 'bg-gray-100 text-gray-800';
 
+    const labels: Record<string, string> = {
+        pending: 'New',
+        accepted: 'Accepted',
+        preparing: 'Preparing',
+        ready: 'Searching...',
+        delivering: 'Found Driver',
+        arrived: 'Driver Arrived',
+        completed: 'Completed',
+        cancelled: 'Cancelled'
+    };
+
     return (
-        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide ${style}`} >
-            {status}
-        </span >
+        <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold tracking-wide ${style}`}>
+            {labels[status] || status}
+        </span>
     );
 };
 
@@ -282,7 +293,7 @@ export const MerchantOrders: React.FC = () => {
                                 {selectedOrder.status === 'delivering' && (
                                     <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-800/30 flex items-center gap-3">
                                         <Truck className="animate-pulse text-indigo-500" size={20} />
-                                        <p className="text-indigo-600 dark:text-indigo-400 text-sm font-bold">Driver is assigned and on the way!</p>
+                                        <p className="text-indigo-600 dark:text-indigo-400 text-sm font-bold">Found a driver, they are coming!</p>
                                     </div>
                                 )}
                                 {['delivering', 'arrived', 'ready', 'preparing', 'accepted'].includes(selectedOrder.status) && (
