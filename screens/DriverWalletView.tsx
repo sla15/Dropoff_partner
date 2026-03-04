@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { TrendingUp, AlertTriangle, Wallet, Car, CreditCard, Star, Trash2 } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Wallet, Car, CreditCard, Star, Trash2, Copy } from 'lucide-react';
 
 export const DriverWalletView: React.FC = () => {
     const { profile, transactions, payCommission, reviews, appSettings } = useApp();
@@ -74,6 +74,29 @@ export const DriverWalletView: React.FC = () => {
                 >
                     <Wallet size={18} /> Pay via Wave
                 </button>
+
+                {/* Wave Account Info */}
+                <div className="mt-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-700 flex items-center justify-between group">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center">
+                            <CreditCard size={14} />
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Wave Business Number</p>
+                            <p className="text-[15px] font-black text-slate-900 dark:text-white">388 8888</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={() => {
+                            navigator.clipboard.writeText('388 8888');
+                            // We can use a toast or notification if available
+                            alert('Wave number copied: 388 8888');
+                        }}
+                        className="p-2 text-slate-400 hover:text-[#00E39A] transition-colors"
+                    >
+                        <Copy size={18} />
+                    </button>
+                </div>
             </div>
 
             <div className="px-8 mt-10 mb-6 flex justify-between items-end">

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Toggle } from '../components/Toggle';
 import { Car, Star, LogOut, Moon, ArrowLeft, Store, Users, Trash2, ChevronRight, Camera } from 'lucide-react';
@@ -10,8 +10,14 @@ import { ProfileMerchantView } from './ProfileMerchantView';
 import { Phone, MessageCircle, Mail } from 'lucide-react';
 
 export const ProfileScreen: React.FC = () => {
-  const { role, updateActiveRole, profile, isDarkMode, toggleTheme, pushNotification, startSecondaryOnboarding, setCurrentTab, uploadFile, updateProfile, syncProfile, signOut, showAlert, requestAccountDeletion } = useApp();
-  const [showSupportDrawer, setShowSupportDrawer] = React.useState(false);
+  const {
+    role, updateActiveRole, profile, isDarkMode, toggleTheme,
+    pushNotification, startSecondaryOnboarding, setCurrentTab,
+    uploadFile, updateProfile, syncProfile, signOut, showAlert,
+    requestAccountDeletion, appSettings
+  } = useApp();
+  const [showSupportDrawer, setShowSupportDrawer] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleRoleSwitch = (targetRole: Role) => {
     if (targetRole === 'DRIVER') {
@@ -51,6 +57,15 @@ export const ProfileScreen: React.FC = () => {
         <button onClick={handleBack} className="w-11 h-11 rounded-full bg-slate-50 dark:bg-zinc-800 flex items-center justify-center text-slate-900 dark:text-white active:scale-90 transition-transform"><ArrowLeft size={22} /></button>
         <div className="flex-1 text-center font-black text-slate-900 dark:text-white text-xl mr-11 tracking-tight">Profile</div>
       </div>
+
+      {isDeleting && (
+        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white dark:bg-zinc-900 p-8 rounded-3xl flex flex-col items-center gap-4 shadow-2xl">
+            <div className="w-12 h-12 border-4 border-[#00E39A] border-t-transparent rounded-full animate-spin" />
+            <p className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-xs">Deleting Account...</p>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
         {/* Profile Header */}
@@ -180,14 +195,25 @@ export const ProfileScreen: React.FC = () => {
                   'Delete Account',
                   'Are you sure you want to delete your account? This action cannot be undone and will remove your access to the platform.',
                   async () => {
-                    const { success } = await requestAccountDeletion();
-                    if (success) {
-                      await signOut();
-                    } else {
-                      pushNotification('Error', 'Could not submit deletion request. Please try again.', 'SYSTEM');
+                    setIsDeleting(true);
+                    try {
+                      const result = await requestAccountDeletion();
+                      if (result.success) {
+                        await signOut();
+                      } else if (result.error === 'DEBT_BLOCK') {
+                        const msg = `You cannot delete your account yet. You have a commission debt of D${result.debtAmount}. Please pay the debt first using our Wave business number: 388 8888. Tap OK to copy the number.`;
+                        showAlert('Action Required', msg, () => {
+                          navigator.clipboard.writeText('388 8888');
+                          pushNotification('Copied', 'Wave number copied to clipboard', 'SYSTEM');
+                        });
+                      } else {
+                        pushNotification('Error', result.error || 'Could not submit deletion request.', 'SYSTEM');
+                      }
+                    } finally {
+                      setIsDeleting(false);
                     }
                   },
-                  'Request Deletion',
+                  'Yes, Delete account',
                   'Cancel'
                 );
               }}
@@ -207,7 +233,7 @@ export const ProfileScreen: React.FC = () => {
             <div className="relative bg-white dark:bg-zinc-900 w-full rounded-t-[2.5rem] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-300">
               <div className="w-12 h-1.5 bg-gray-200 dark:bg-zinc-800 rounded-full mx-auto mb-8" />
               <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2 text-center">Contact DROPOFF</h2>
-              <p className="text-slate-500 dark:text-slate-400 text-center mb-8 px-4 font-bold">To delete your account, please reach out to our team via any of these channels.</p>
+              <p className="text-slate-500 dark:text-slate-400 text-center mb-8 px-4 font-bold">Need help? Reach out to our team via any of these channels.</p>
 
               <div className="space-y-3">
                 <a href="tel:+2203888888" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
@@ -226,10 +252,10 @@ export const ProfileScreen: React.FC = () => {
                   <ChevronRight size={18} className="text-slate-300" />
                 </a>
 
-                <a href="mailto:support@dropoff.gm" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
+                <a href="mailto:dropoffgm@gmail.com" className="w-full p-5 bg-slate-50 dark:bg-zinc-800 rounded-2xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 active:scale-95 transition-all">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-500/10 text-orange-500 flex items-center justify-center"><Mail size={20} /></div>
-                    <span className="font-black text-slate-900 dark:text-white">Send Email</span>
+                    <span className="font-black text-slate-900 dark:text-white">dropoffgm@gmail.com</span>
                   </div>
                   <ChevronRight size={18} className="text-slate-300" />
                 </a>

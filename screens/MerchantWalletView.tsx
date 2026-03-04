@@ -34,6 +34,28 @@ export const MerchantWalletView: React.FC = () => {
                     <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash to Collect</p>
                     <p className="text-xl font-black text-slate-900 dark:text-white">D{profile.walletBalance.toLocaleString()}</p>
                     <button className="mt-3 text-[#00E39A] text-[10px] font-black uppercase flex items-center gap-1">Request <ArrowUpRight size={10} /></button>
+
+                    {/* Wave Account Info */}
+                    <div className="mt-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-700 flex items-center justify-between group">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center">
+                                <ShoppingBag size={14} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Wave Business Number</p>
+                                <p className="text-[15px] font-black text-slate-900 dark:text-white">388 8888</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                navigator.clipboard.writeText('388 8888');
+                                alert('Wave number copied: 388 8888');
+                            }}
+                            className="p-2 text-slate-400 hover:text-[#00E39A] transition-colors"
+                        >
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#00E39A]">Copy</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 

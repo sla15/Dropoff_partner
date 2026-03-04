@@ -347,9 +347,10 @@ export const useRideLifecycle = (
     }, [currentRide]);
 
     useEffect(() => {
-        if (rideStatus === 'NAVIGATING' && currentRide?.type === 'PASSENGER' && currentRide?.dropoff_lat && currentRide?.dropoff_lng && profile.currentLat && profile.currentLng) {
+        const isRideOrDelivery = currentRide?.type === 'PASSENGER' || currentRide?.type === 'DELIVERY' || currentRide?.type === 'MERCHANT_DELIVERY' || currentRide?.ride_type === 'MERCHANT_DELIVERY';
+        if (rideStatus === 'NAVIGATING' && isRideOrDelivery && currentRide?.dropoff_lat && currentRide?.dropoff_lng && profile.currentLat && profile.currentLng) {
             const dist = calculateDistance(profile.currentLat, profile.currentLng, currentRide.dropoff_lat, currentRide.dropoff_lng);
-            if (dist < 0.05) handleCompleteRide(true);
+            if (dist < 0.075) handleCompleteRide(true);
         }
     }, [profile.currentLat, profile.currentLng, rideStatus, currentRide]);
 

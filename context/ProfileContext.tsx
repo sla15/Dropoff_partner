@@ -1182,32 +1182,39 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const requestAccountDeletion = async () => {
         if (!user) return { success: false, error: 'User not authenticated' };
 
-        const timestamp = new Date().toISOString();
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                deletion_requested_at: timestamp,
-                deleted_at: timestamp
-            })
-            .eq('id', user.id);
+        try {
+            const { data, error } = await supabase.rpc('delete_partner_account');
 
-        if (error) {
-            console.error('Error requesting account deletion:', error);
-            return { success: false, error: error.message };
+            if (error) {
+                console.error('Error requesting account deletion:', error);
+                return { success: false, error: error.message };
+            }
+
+            if (data?.startsWith('DEBT_BLOCK:')) {
+                const debtAmount = data.split(':')[1];
+                return { success: false, error: 'DEBT_BLOCK', debtAmount };
+            }
+
+            if (data === 'SUCCESS') {
+                return { success: true };
+            }
+
+            return { success: false, error: data || 'Unknown error occurred' };
+        } catch (err: any) {
+            console.error('Exception during account deletion:', err);
+            return { success: false, error: err.message || 'An unexpected error occurred' };
         }
-
-        // Locally update profile state
-        setProfile(prev => ({
-            ...prev,
-            deletion_requested_at: timestamp,
-            deleted_at: timestamp
-        }));
-        return { success: true };
     };
 
     const signOut = async () => {
         setIncomingRides([]);
-        await supabase.auth.signOut();
+        try {
+            await supabase.auth.signOut();
+        } catch (error) {
+            console.warn('Sign out failed, likely due to session already being invalidated (e.g. account deleted):', error);
+            // Even if sign out fails, we want the user to be redirected to login, 
+            // which usually happens automatically when the auth state listener triggers.
+        }
     };
 
     return (
