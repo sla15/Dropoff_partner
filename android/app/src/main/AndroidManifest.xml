@@ -34,6 +34,8 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default"/>
     </application>
 
     <!-- Permissions -->
@@ -41,8 +43,4 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Required for push notifications on Android 13+ -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-
-    <application>
-        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default"/>
-    </application>
 </manifest>
