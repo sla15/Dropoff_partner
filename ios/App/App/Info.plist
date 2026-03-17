@@ -55,5 +55,9 @@
 	<string>DROPOFF Partner requires camera access to allow you to take photos of your identity documents and vehicle for verification.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>DROPOFF Partner requires photo library access to let you upload existing photos of your documents for verification.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 </dict>
 </plist>
