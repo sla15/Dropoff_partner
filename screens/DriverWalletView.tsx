@@ -56,14 +56,14 @@ export const DriverWalletView: React.FC = () => {
                     ></div>
                 </div>
 
-                <div className={`mt-6 ${pendingManualPayment ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20'} rounded-2xl p-4 border flex gap-4`}>
-                    <AlertTriangle size={20} className={pendingManualPayment ? 'text-yellow-500 shrink-0' : 'text-red-500 shrink-0'} />
+                <div className={`mt-6 ${pendingManualPayment?.status === 'PENDING' ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-100 dark:border-yellow-900/20' : 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/20'} rounded-2xl p-4 border flex gap-4`}>
+                    <AlertTriangle size={20} className={pendingManualPayment?.status === 'PENDING' ? 'text-yellow-500 shrink-0' : 'text-red-500 shrink-0'} />
                     <div>
-                        <h4 className={`${pendingManualPayment ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'} text-xs font-black uppercase tracking-wider mb-1`}>
-                            {pendingManualPayment ? 'Your Payment is been process' : 'Take Note'}
+                        <h4 className={`${pendingManualPayment?.status === 'PENDING' ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'} text-xs font-black uppercase tracking-wider mb-1`}>
+                            {pendingManualPayment?.status === 'PENDING' ? 'Your Payment is been process' : 'Take Note'}
                         </h4>
-                        <p className={`${pendingManualPayment ? 'text-yellow-600/80 dark:text-yellow-400/80' : 'text-red-500/80'} text-[11px] font-medium leading-relaxed`}>
-                            {pendingManualPayment 
+                        <p className={`${pendingManualPayment?.status === 'PENDING' ? 'text-yellow-600/80 dark:text-yellow-400/80' : 'text-red-500/80'} text-[11px] font-medium leading-relaxed`}>
+                            {pendingManualPayment?.status === 'PENDING' 
                                 ? `We received your payment of D${pendingManualPayment.amount.toFixed(2)}. Please give us 5-10 mins to verify and unlock your account.`
                                 : `You cannot work if your debt passes D${appSettings?.max_driver_cash_amount || '5,000'}. Pay your fees every day.`
                             }

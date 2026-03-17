@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Send, ExternalLink, Info, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Send, ExternalLink, Info, CheckCircle2, Clock } from 'lucide-react';
 import { useProfile } from '../context/ProfileContext';
 import { useUI } from '../context/UIContext';
 
@@ -11,7 +11,10 @@ export const ManualPaymentScreen: React.FC<ManualPaymentScreenProps> = ({ onBack
     const { profile, submitManualPayment, appSettings } = useProfile();
     const { showAlert, isDarkMode } = useUI();
     const [transactionId, setTransactionId] = useState('');
+    const [amount, setAmount] = useState(profile.commissionDebt.toString());
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [cooldownSeconds, setCooldownSeconds] = useState(0);
+    const { isLocked, pendingManualPayment } = useProfile();
 
     // Wave IDs: 9-20 chars, Alphanumeric + _ + -, starts with T_ or PT- (case insensitive prefix)
     const validateId = (id: string) => {
@@ -23,16 +26,27 @@ export const ManualPaymentScreen: React.FC<ManualPaymentScreenProps> = ({ onBack
         return alphanumericRegex.test(val);
     };
 
+    const formatTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
     const isValidId = validateId(transactionId);
 
     const handleSubmit = async () => {
         if (!isValidId) {
-            showAlert("Invalid ID", "The Wave Transaction ID must start with 'T_'. Please check your receipt.");
+            showAlert("Invalid ID", "The Wave Transaction ID must start with 'T_' or 'PT-'. Please check your receipt.");
+            return;
+        }
+
+        if (cooldownSeconds > 0) {
+            showAlert("Wait", `Please wait ${Math.floor(cooldownSeconds / 60)}m ${cooldownSeconds % 60}s before submitting again.`);
             return;
         }
 
         setIsSubmitting(true);
-        const { success, error } = await submitManualPayment('WAVE_MANUAL', transactionId.trim().toUpperCase());
+        const { success, error } = await submitManualPayment('WAVE_MANUAL', transactionId.trim().toUpperCase(), parseFloat(amount));
         setIsSubmitting(false);
 
         if (success) {
@@ -42,9 +56,37 @@ export const ManualPaymentScreen: React.FC<ManualPaymentScreenProps> = ({ onBack
                 "Your payment is being processed. It usually takes 5-10 minutes. You can check your status in the wallet."
             );
         } else {
-            showAlert("Error", error || "Something went wrong. Please try again or contact support.");
+            // Check if error is about cooldown and extract time if possible
+            if (error?.includes('wait')) {
+                // The backend error message contains the time, e.g., "Please wait 4m 59s..."
+                // We'll set a 5 min cooldown locally for safety
+                setCooldownSeconds(300);
+            }
+            showAlert("Action Required", error || "Something went wrong. Please try again or contact support.");
         }
     };
+
+    // Cooldown timer effect
+    React.useEffect(() => {
+        if (cooldownSeconds > 0) {
+            const timer = setInterval(() => {
+                setCooldownSeconds(prev => Math.max(0, prev - 1));
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [cooldownSeconds]);
+
+    // Initial cooldown check if there's a pending payment
+    React.useEffect(() => {
+        if (pendingManualPayment?.createdAt) {
+            const created = new Date(pendingManualPayment.createdAt).getTime();
+            const now = Date.now();
+            const diff = Math.floor((now - created) / 1000);
+            if (diff < 300) {
+                setCooldownSeconds(300 - diff);
+            }
+        }
+    }, [pendingManualPayment]);
 
     return (
         <div className={`flex-1 flex flex-col ${isDarkMode ? 'bg-zinc-950' : 'bg-slate-50'} animate-in slide-in-from-right duration-300`}>
@@ -87,7 +129,43 @@ export const ManualPaymentScreen: React.FC<ManualPaymentScreenProps> = ({ onBack
                     </ol>
                 </div>
 
-                {/* Input Field */}
+                {/* Amount Field */}
+                <div className="space-y-2 mb-6">
+                    <label className={`text-[11px] font-black uppercase tracking-[0.1em] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} ml-1`}>
+                        Amount to Pay (D)
+                    </label>
+                    <div className="relative">
+                        <input
+                            type="number"
+                            readOnly={isLocked}
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className={`
+                                w-full px-12 py-5 rounded-2xl text-[17px] font-black tracking-tight outline-none transition-all
+                                ${isDarkMode 
+                                    ? 'bg-zinc-900 border-zinc-800 text-white' 
+                                    : 'bg-white border-slate-200 text-slate-900 shadow-sm'}
+                                ${isLocked ? 'opacity-60 grayscale-[0.5]' : 'focus:border-[#00E39A]'}
+                                border-2
+                            `}
+                        />
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 font-black">
+                            D
+                        </div>
+                        {isLocked && (
+                            <div className="absolute right-6 top-1/2 -translate-y-1/2 text-amber-500">
+                                <Info size={20} />
+                            </div>
+                        )}
+                    </div>
+                    {isLocked && (
+                        <p className="text-[10px] font-bold text-amber-600 dark:text-amber-500/80 ml-2">
+                           Debt limit reached. Full payment required to unsuspend.
+                        </p>
+                    )}
+                </div>
+
+                {/* Input Field (Transaction ID) */}
                 <div className="space-y-2 mb-8">
                     <label className={`text-[11px] font-black uppercase tracking-[0.1em] ${isDarkMode ? 'text-zinc-500' : 'text-slate-400'} ml-1`}>
                         Transaction ID (starts with T_ or PT-)
@@ -135,18 +213,30 @@ export const ManualPaymentScreen: React.FC<ManualPaymentScreenProps> = ({ onBack
 
             {/* Submit Button */}
             <div className={`px-6 pb-8 ${isDarkMode ? 'bg-zinc-900/80 border-t border-zinc-800' : 'bg-white/80 border-t border-slate-100'} backdrop-blur-lg`} style={{ paddingTop: '20px', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 20px)' }}>
+                {cooldownSeconds > 0 && (
+                    <div className="flex items-center justify-center gap-2 mb-4">
+                        <Clock size={16} className="text-amber-500" />
+                        <span className="text-amber-600 dark:text-amber-400 text-[11px] font-black uppercase tracking-wider">
+                            {pendingManualPayment?.status === 'PENDING' 
+                                ? `Payment in Progress... Wait ${formatTime(cooldownSeconds)}`
+                                : `Wait ${formatTime(cooldownSeconds)} before next submission`}
+                        </span>
+                    </div>
+                )}
                 <button
-                    disabled={!isValidId || isSubmitting}
+                    disabled={!isValidId || isSubmitting || cooldownSeconds > 0}
                     onClick={handleSubmit}
                     className={`
                         w-full py-5 rounded-2xl text-[15px] font-black flex items-center justify-center gap-3 transition-all uppercase tracking-[0.1em]
-                        ${isValidId && !isSubmitting
+                        ${isValidId && !isSubmitting && cooldownSeconds === 0
                             ? 'bg-[#00E39A] text-slate-900 shadow-xl active:scale-[0.98]' 
                             : 'bg-slate-200 text-slate-400 dark:bg-zinc-800 dark:text-zinc-600'}
                     `}
                 >
                     {isSubmitting ? (
                         <div className="w-5 h-5 border-2 border-slate-900/20 border-t-slate-900 rounded-full animate-spin"></div>
+                    ) : cooldownSeconds > 0 ? (
+                        <>In Progress...</>
                     ) : (
                         <>
                             Submit Payment <Send size={18} />

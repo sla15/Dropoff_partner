@@ -243,21 +243,30 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 isSuspended: driverData?.is_suspended || false
             };
 
-            // Fetch pending manual payments
+            // Fetch most recent manual payment to handle cooldown and pending status
             const { data: manualPayments } = await supabase
                 .from('manual_payments')
                 .select('*')
                 .eq('user_id', userId)
-                .eq('status', 'PENDING')
                 .order('created_at', { ascending: false })
                 .limit(1);
 
             if (manualPayments && manualPayments.length > 0) {
-                setPendingManualPayment({
-                    amount: manualPayments[0].amount,
-                    method: manualPayments[0].payment_method,
-                    createdAt: manualPayments[0].created_at
-                });
+                const latest = manualPayments[0];
+                const createdTime = new Date(latest.created_at).getTime();
+                const isRecent = (Date.now() - createdTime) < 5 * 60 * 1000;
+                
+                // Set pendingManualPayment if it's PENDING OR if it's recent (for cooldown timer)
+                if (latest.status === 'PENDING' || isRecent) {
+                    setPendingManualPayment({
+                        amount: latest.amount,
+                        method: latest.payment_method,
+                        createdAt: latest.created_at,
+                        status: latest.status
+                    });
+                } else {
+                    setPendingManualPayment(null);
+                }
             } else {
                 setPendingManualPayment(null);
             }
@@ -581,6 +590,29 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             supabase.removeChannel(channel);
         };
     }, [user, role]);
+
+    // Real-time Manual Payment Sync (for automatic UI reset)
+    useEffect(() => {
+        if (!user) return;
+
+        const channel = supabase
+            .channel(`manual_payments_sync_${user.id}`)
+            .on('postgres_changes', {
+                event: '*', // Listen for all changes (INSERT for new submissions, UPDATE for admin approval)
+                schema: 'public',
+                table: 'manual_payments',
+                filter: `user_id=eq.${user.id}`
+            }, (payload) => {
+                console.log("[ProfileContext] Manual Payment change detected:", payload);
+                // Refresh user data (commission debt, etc.) when a payment is updated or added
+                loadUserData(user.id);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user, loadUserData]);
 
     // Real-time Business Sync (for Merchants)
     useEffect(() => {
@@ -1272,14 +1304,38 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
-    const submitManualPayment = async (method: 'WAVE_MANUAL' | 'OFFICE', transactionId?: string) => {
+    const submitManualPayment = async (method: 'WAVE_MANUAL' | 'OFFICE', transactionId?: string, amount?: number) => {
         if (!user) return { success: false, error: 'User not authenticated' };
-        const amount = profile.commissionDebt;
+        
+        const paymentAmount = amount !== undefined ? amount : profile.commissionDebt;
 
         try {
+            // Check for 5-minute cooldown for the same transaction ID or recent submission
+            const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+            
+            const { data: recentPayments, error: checkError } = await supabase
+                .from('manual_payments')
+                .select('created_at')
+                .eq('user_id', user.id)
+                .gte('created_at', fiveMinsAgo)
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (checkError) console.error("Cooldown check error:", checkError);
+            
+            if (recentPayments && recentPayments.length > 0) {
+                const lastSub = new Date(recentPayments[0].created_at);
+                const nextAllowed = new Date(lastSub.getTime() + 5 * 60 * 1000);
+                const waitSecs = Math.ceil((nextAllowed.getTime() - Date.now()) / 1000);
+                return { 
+                    success: false, 
+                    error: `Please wait ${Math.floor(waitSecs / 60)}m ${waitSecs % 60}s before submitting another payment.` 
+                };
+            }
+
             const { error } = await supabase.from('manual_payments').insert({
                 user_id: user.id,
-                amount,
+                amount: paymentAmount,
                 transaction_id: transactionId,
                 payment_method: method,
                 status: 'PENDING'
@@ -1288,7 +1344,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (error) throw error;
 
             setPendingManualPayment({
-                amount,
+                amount: paymentAmount,
                 method,
                 createdAt: new Date().toISOString()
             });
