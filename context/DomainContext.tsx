@@ -172,13 +172,13 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
             setTransactions([...rideTx, ...orderTx].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
 
-            // 4. Fetch Reviews
+            // 4. Fetch Reviews (Generic/Driver reviews if any)
             const { data: reviewsData } = await supabase.from('reviews')
                 .select('*')
                 .eq('target_id', user.id)
                 .order('created_at', { ascending: false });
 
-            // Fetch reviewer names manually (simpler than complex join for now without type gen)
+            // Fetch reviewer names manually
             const mappedReviews: Review[] = [];
             if (reviewsData) {
                 for (const r of reviewsData) {
@@ -196,10 +196,35 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                     }
                 }
             }
-            setReviews(mappedReviews);
 
+            // 5. Fetch Business Specific Reviews if Merchant
             if (business) {
+                const { data: bizReviews, error: bizRevErr } = await supabase
+                    .from('business_reviews')
+                    .select(`
+                        *,
+                        profiles!business_reviews_user_id_fkey(full_name)
+                    `)
+                    .eq('business_id', business.id)
+                    .order('created_at', { ascending: false });
+
+                if (bizReviews) {
+                    const mappedBizReviews: Review[] = bizReviews.map(r => ({
+                        id: r.id,
+                        reviewerName: (r.profiles as any)?.full_name || 'Anonymous',
+                        rating: r.rating || 0,
+                        comment: r.comment || '',
+                        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'N/A'
+                    }));
+                    // Combine or replace? User wants "fetch the review from the database about that business". 
+                    // Let's combine for now, or prioritize biz reviews for merchants.
+                    setReviews([...mappedBizReviews, ...mappedReviews]);
+                } else {
+                    setReviews(mappedReviews);
+                }
                 await loadMerchantOrders(business.id);
+            } else {
+                setReviews(mappedReviews);
             }
         } catch (err) {
             console.error("Error loading domain data:", err);
@@ -207,8 +232,18 @@ export const DomainProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }, [user, loadMerchantOrders]);
 
     useEffect(() => {
-        loadData();
-    }, [loadData]);
+        if (!user) {
+            setOrders([]);
+            setProducts([]);
+            setTransactions([]);
+            setReviews([]);
+            setMerchantOrders([]);
+            setCurrentRide(null);
+            setRideStatus('IDLE');
+        } else {
+            loadData();
+        }
+    }, [user, loadData]);
 
     // REAL-TIME SUBSCRIPTIONS
     useEffect(() => {

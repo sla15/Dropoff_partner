@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Toggle } from '../components/Toggle';
 import { Car, Star, LogOut, Moon, ArrowLeft, Store, Users, Trash2, ChevronRight, Camera as CameraIcon } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 
 import { supabase } from '../lib/supabase';
@@ -24,9 +25,19 @@ export const ProfileScreen: React.FC = () => {
   } = useApp();
   const [showSupportDrawer, setShowSupportDrawer] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(
-    typeof window !== 'undefined' ? (window.Notification?.permission === 'granted') : false
-  );
+  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
+
+  React.useEffect(() => {
+    const checkPerms = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const status = await PushNotifications.checkPermissions();
+        setIsNotificationsEnabled(status.receive === 'granted');
+      } else if (typeof window !== 'undefined' && 'Notification' in window) {
+        setIsNotificationsEnabled(window.Notification?.permission === 'granted');
+      }
+    };
+    checkPerms();
+  }, []);
 
   const handleRoleSwitch = (targetRole: Role) => {
     if (targetRole === 'DRIVER') {

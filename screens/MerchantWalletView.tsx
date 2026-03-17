@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { TrendingUp, ShoppingBag, Star, Calendar, ArrowUpRight } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Star, Calendar, ArrowUpRight, Package } from 'lucide-react';
 
 export const MerchantWalletView: React.FC = () => {
     const { profile, transactions, reviews, orderStats, merchantOrders } = useApp();
@@ -28,35 +28,42 @@ export const MerchantWalletView: React.FC = () => {
                 <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/20 rounded-full blur-3xl"></div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="mx-6 mt-6 grid grid-cols-1 gap-4">
-                <div className="bg-white dark:bg-zinc-900 p-6 rounded-[28px] border border-slate-100 dark:border-zinc-800 shadow-sm">
-                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest mb-2">Cash to Collect</p>
-                    <p className="text-xl font-black text-slate-900 dark:text-white">D{profile.walletBalance.toLocaleString()}</p>
-                    <button className="mt-3 text-[#00E39A] text-[10px] font-black uppercase flex items-center gap-1">Request <ArrowUpRight size={10} /></button>
+            {/* Recent Activities Section */}
+            <div className="px-8 mt-10 mb-6 flex justify-between items-end">
+                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Recent Activities</h3>
+                <div className="flex items-center gap-1.5 bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">
+                    <Calendar size={12} className="text-blue-500" />
+                    <span className="text-blue-600 dark:text-blue-400 text-[11px] font-black uppercase tracking-widest">{merchantOrders.length} Events</span>
+                </div>
+            </div>
 
-                    {/* Wave Account Info */}
-                    <div className="mt-4 p-4 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-zinc-700 flex items-center justify-between group">
-                        <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/20 text-blue-500 flex items-center justify-center">
-                                <ShoppingBag size={14} />
+            <div className="px-6 space-y-3">
+                {merchantOrders.slice(0, 5).map((order) => (
+                    <div key={order.id} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 shadow-sm relative overflow-hidden group">
+                        <div className="flex items-center gap-5">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-50 dark:bg-black flex items-center justify-center text-slate-400 group-hover:text-[#00E39A] transition-colors">
+                                <Package size={22} />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Wave Business Number</p>
-                                <p className="text-[15px] font-black text-slate-900 dark:text-white">388 8888</p>
+                                <p className="font-black text-slate-900 dark:text-white text-[15px]">Order from {order.customerName}</p>
+                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                    {order.timestamp.toLocaleDateString()} • {order.items.length} {order.items.length === 1 ? 'item' : 'items'}
+                                </p>
                             </div>
                         </div>
-                        <button
-                            onClick={() => {
-                                navigator.clipboard.writeText('388 8888');
-                                alert('Wave number copied: 388 8888');
-                            }}
-                            className="p-2 text-slate-400 hover:text-[#00E39A] transition-colors"
-                        >
-                            <span className="text-[10px] font-black uppercase tracking-widest text-[#00E39A]">Copy</span>
-                        </button>
+                        <div className="text-right">
+                            <p className="font-black text-[15px] text-slate-900 dark:text-white">D{order.total}</p>
+                            <p className={`text-[10px] font-bold uppercase tracking-widest mt-0.5 ${order.status === 'completed' ? 'text-green-500' : 'text-orange-500'}`}>
+                                {order.status}
+                            </p>
+                        </div>
                     </div>
-                </div>
+                ))}
+                {merchantOrders.length === 0 && (
+                    <div className="text-center p-8 bg-slate-50 dark:bg-zinc-900/50 rounded-3xl border border-dashed border-slate-200 dark:border-zinc-800">
+                        <p className="text-slate-400 text-sm font-bold">No recent activities found</p>
+                    </div>
+                )}
             </div>
 
             {/* Customer Reviews Section */}
@@ -69,7 +76,12 @@ export const MerchantWalletView: React.FC = () => {
             </div>
 
             <div className="px-6 space-y-3">
-                {reviews.slice(0, 3).map((rev) => (
+                {reviews.length === 0 ? (
+                    <div className="text-center p-8 bg-slate-50 dark:bg-zinc-900/50 rounded-3xl border border-dashed border-slate-200 dark:border-zinc-800">
+                        <p className="text-slate-400 text-sm font-bold">No reviews yet</p>
+                    </div>
+                ) : (
+                    reviews.slice(0, 5).map((rev) => (
                     <div key={rev.id} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl border border-slate-100 dark:border-zinc-800 shadow-sm">
                         <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-3">
@@ -89,34 +101,10 @@ export const MerchantWalletView: React.FC = () => {
                         </div>
                         <p className="text-slate-500 text-xs leading-relaxed font-medium italic">"{rev.comment}"</p>
                     </div>
-                ))}
+                )))}
             </div>
 
-            {/* Sales History */}
-            <div className="px-8 mt-10 mb-6 flex justify-between items-end">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">My Sales</h3>
-                <button className="text-[#00E39A] text-xs font-black uppercase tracking-widest">Export</button>
-            </div>
-
-            <div className="px-6 space-y-3 pb-8">
-                {transactions.filter(t => t.type === 'ORDER').map((tx) => (
-                    <div key={tx.id} className="bg-white dark:bg-zinc-900 p-5 rounded-3xl flex items-center justify-between border border-slate-100 dark:border-zinc-800 shadow-sm">
-                        <div className="flex items-center gap-5">
-                            <div className="w-12 h-12 rounded-2xl bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center text-orange-500">
-                                <Calendar size={22} />
-                            </div>
-                            <div>
-                                <p className="font-black text-slate-900 dark:text-white text-[15px]">{tx.description}</p>
-                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-1">{tx.date}</p>
-                            </div>
-                        </div>
-                        <div className="text-right">
-                            <p className="font-black text-[15px] text-slate-900 dark:text-white">D{tx.amount.toFixed(2)}</p>
-                            <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest mt-0.5">Paid</p>
-                        </div>
-                    </div>
-                ))}
-            </div>
+            <div className="pb-10" />
         </div>
     );
 };

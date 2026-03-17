@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { Geolocation } from '@capacitor/geolocation';
 import { Role, UserProfile, RideRequest } from '../types';
 import { INITIAL_PROFILE } from '../data/dummyData';
 import { supabase } from '../lib/supabase';
@@ -44,8 +45,12 @@ interface ProfileContextType {
     rejectedRideIds: Set<string>;
     setRejectedRideIds: React.Dispatch<React.SetStateAction<Set<string>>>;
     isLocked: boolean;
+    lockReason: 'DEBT_LIMIT' | 'SUSPENDED' | null;
     isLoading: boolean;
     requestAccountDeletion: () => Promise<{ success: boolean; error?: string }>;
+    submitManualPayment: (method: 'WAVE_MANUAL' | 'OFFICE', transactionId?: string) => Promise<{ success: boolean; error?: string }>;
+    pendingManualPayment: { amount: number; method: string; createdAt: string } | null;
+    signOut: () => Promise<void>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -63,6 +68,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [orderStats, setOrderStats] = useState({ count: 0, revenue: 0 });
     const [incomingRides, setIncomingRides] = useState<RideRequest[]>([]);
     const [rejectedRideIds, setRejectedRideIds] = useState<Set<string>>(new Set());
+    const [pendingManualPayment, setPendingManualPayment] = useState<{ amount: number; method: string; createdAt: string } | null>(null);
 
     const [appSettings, setAppSettings] = useState({
         commission_percentage: 15,
@@ -237,6 +243,35 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 isSuspended: driverData?.is_suspended || false
             };
 
+            // Fetch pending manual payments
+            const { data: manualPayments } = await supabase
+                .from('manual_payments')
+                .select('*')
+                .eq('user_id', userId)
+                .eq('status', 'PENDING')
+                .order('created_at', { ascending: false })
+                .limit(1);
+
+            if (manualPayments && manualPayments.length > 0) {
+                setPendingManualPayment({
+                    amount: manualPayments[0].amount,
+                    method: manualPayments[0].payment_method,
+                    createdAt: manualPayments[0].created_at
+                });
+            } else {
+                setPendingManualPayment(null);
+            }
+
+            // Check for suspension change to trigger notification
+            const wasLocked = (profile.commissionDebt >= appSettings.max_driver_cash_amount) || profile.isSuspended;
+            const isNowLocked = (mergedProfile.commissionDebt >= appSettings.max_driver_cash_amount) || mergedProfile.isSuspended;
+
+            if (!wasLocked && isNowLocked) {
+                pushNotification("Account Suspended", "Your account has been suspended due to debt limit. Please make a payment to continue.", "SYSTEM");
+            } else if (wasLocked && !isNowLocked) {
+                pushNotification("Account Unsuspended", "Your account has been unsuspended. You can now receive new ride requests.", "SYSTEM");
+            }
+
             setProfile(mergedProfile);
             await loadStats(userId);
 
@@ -401,6 +436,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     setIsOnboarded(false);
                     setIncomingRides([]);
                     setRole('CUSTOMER');
+                    setProfile(INITIAL_PROFILE);
+                    setRideStats({ completed: 0 });
+                    setOrderStats({ count: 0, revenue: 0 });
                 }
             } catch (error) {
                 console.error('Auth check error:', error);
@@ -450,39 +488,62 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Real-time Location Sync (watchPosition when online)
     const lastLocationUpdateTime = useRef<number>(0);
     useEffect(() => {
-        let watchId: number | null = null;
+        let watchId: string | null = null;
 
-        if (isOnboarded && role === 'DRIVER' && profile.isOnline && user) {
-            if ("geolocation" in navigator) {
-                watchId = navigator.geolocation.watchPosition(
-                    async (position) => {
-                        const { latitude, longitude, heading } = position.coords;
-
-                        // Local state update for smooth map movement (UI only)
-                        updateProfile({ currentLat: latitude, currentLng: longitude, heading: heading || 0 });
-
-                        // Throttled DB Sync: Only every 20 seconds for partner app (saves battery/data)
-                        const now = Date.now();
-                        const isLowEnd = (navigator.hardwareConcurrency || 4) <= 2;
-                        const syncThreshold = isLowEnd ? 30000 : 15000;
-                        
-                        if (now - lastLocationUpdateTime.current > syncThreshold) {
-                            lastLocationUpdateTime.current = now;
-                            await supabase.from('drivers').update({
-                                current_lat: latitude,
-                                current_lng: longitude,
-                                heading: heading || 0,
-                            }).eq('id', user.id);
+        const startWatching = async () => {
+            if (isOnboarded && role === 'DRIVER' && profile.isOnline && user) {
+                try {
+                    // Check and request permissions first
+                    const permissions = await Geolocation.checkPermissions();
+                    if (permissions.location !== 'granted') {
+                        const request = await Geolocation.requestPermissions();
+                        if (request.location !== 'granted') {
+                            console.warn("Location permission not granted");
+                            return;
                         }
-                    },
-                    (err) => console.error("Location watch error:", err),
-                    { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
-                );
+                    }
+
+                    watchId = await Geolocation.watchPosition(
+                        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 },
+                        async (position, err) => {
+                            if (err) {
+                                console.error("Location watch error:", err);
+                                return;
+                            }
+                            if (!position) return;
+
+                            const { latitude, longitude, heading } = position.coords;
+
+                            // Local state update for smooth map movement (UI only)
+                            updateProfile({ currentLat: latitude, currentLng: longitude, heading: heading || 0 });
+
+                            // Throttled DB Sync: Only every 20 seconds for partner app (saves battery/data)
+                            const now = Date.now();
+                            const isLowEnd = (navigator.hardwareConcurrency || 4) <= 2;
+                            const syncThreshold = isLowEnd ? 30000 : 15000;
+                            
+                            if (now - lastLocationUpdateTime.current > syncThreshold) {
+                                lastLocationUpdateTime.current = now;
+                                await supabase.from('drivers').update({
+                                    current_lat: latitude,
+                                    current_lng: longitude,
+                                    heading: heading || 0,
+                                }).eq('id', user.id);
+                            }
+                        }
+                    );
+                } catch (err) {
+                    console.error("Error starting location watch:", err);
+                }
             }
-        }
+        };
+
+        startWatching();
 
         return () => {
-            if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+            if (watchId !== null) {
+                Geolocation.clearWatch({ id: watchId });
+            }
         };
     }, [isOnboarded, role, profile.isOnline, user]);
 
@@ -599,7 +660,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
                 const estCommission = (parseFloat(newRide.price || '0') * appSettings.commission_percentage) / 100;
                 const currentProfile = profileRef.current;
-                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) >= appSettings.max_driver_cash_amount;
                 const currentDriverVehicleType = currentProfile.vehicle?.type;
 
                 if (!rejectedRideIdsRef.current.has(newRide.id) && !isOverDebtLimit && (rideType === currentDriverVehicleType || isEligibleForDelivery)) {
@@ -621,7 +682,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     // If it's still searching, check if we should show it (maybe it's a batch update)
                     const estCommission = (parseFloat(updatedRide.price || '0') * appSettings.commission_percentage) / 100;
                     const currentProfile = profileRef.current;
-                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) >= appSettings.max_driver_cash_amount;
 
                     if (!rejectedRideIdsRef.current.has(updatedRide.id) && !isOverDebtLimit) {
                         handleNewRide(updatedRide); // This will now update the ride if it exists
@@ -696,7 +757,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             pendingRides.forEach(ride => {
                 const estCommission = (parseFloat(ride.price || '0') * appSettings.commission_percentage) / 100;
                 const currentProfile = profileRef.current;
-                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) >= appSettings.max_driver_cash_amount;
 
                 if (!rejectedRideIdsRef.current.has(ride.id) && !isOverDebtLimit) {
                     handleNewRide(ride);
@@ -895,7 +956,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
                 const estCommission = (parseFloat(newRide.price || '0') * appSettings.commission_percentage) / 100;
                 const currentProfile = profileRef.current;
-                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) >= appSettings.max_driver_cash_amount;
                 const currentDriverVehicleType = currentProfile.vehicle?.type;
 
                 if (!rejectedRideIdsRef.current.has(newRide.id) && !isOverDebtLimit && (rideType === currentDriverVehicleType || isEligibleForDelivery)) {
@@ -916,7 +977,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 } else {
                     const estCommission = (parseFloat(updatedRide.price || '0') * appSettings.commission_percentage) / 100;
                     const currentProfile = profileRef.current;
-                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) > appSettings.max_driver_cash_amount;
+                    const isOverDebtLimit = (currentProfile.commissionDebt + estCommission) >= appSettings.max_driver_cash_amount;
 
                     if (!rejectedRideIdsRef.current.has(updatedRide.id) && !isOverDebtLimit) {
                         handleNewRide(updatedRide);
@@ -1007,7 +1068,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     vehicle_color: activeProfile.vehicle?.color,
                     vehicle_category: categoryValue as any,
                     is_online: activeProfile.isOnline,
-                    approval_status: 'pending',
+                    approval_status: 'approved',
                     submitted_at: new Date().toISOString()
                 }, { onConflict: 'id' });
                 if (driverError) console.error("Driver Sync Error:", driverError);
@@ -1018,7 +1079,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         id_card_url: activeProfile.documents.idCard?.url || null,
                         drivers_license_url: activeProfile.documents.license?.url || null,
                         vehicle_insurance_url: activeProfile.documents.insurance?.url || null,
-                        status: 'pending'
+                        status: 'approved'
                     }, { onConflict: 'driver_id' });
                     if (docsError) console.error("Driver Docs Sync Error:", docsError);
                 }
@@ -1026,6 +1087,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             if (activeProfile.business) {
                 const { error: businessError } = await supabase.from('businesses').upsert({
+                    id: activeProfile.business.id, // Include ID to prevent duplicates
                     owner_id: user.id,
                     name: activeProfile.business?.businessName || 'Unnamed Business',
                     category: activeProfile.business?.category,
@@ -1033,10 +1095,10 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     image_url: activeProfile.business?.logo,
                     lat: activeProfile.business?.lat,
                     lng: activeProfile.business?.lng,
-                    payment_phone: activeProfile.business?.paymentPhone,
+                    payment_phone: activeProfile.business?.payment_phone || activeProfile.business?.paymentPhone,
                     sub_categories: activeProfile.business?.subCategories || [],
                     submitted_at: new Date().toISOString(),
-                    approval_status: 'pending'
+                    approval_status: 'approved'
                 }, { onConflict: 'owner_id' });
                 if (businessError) console.error("Business Sync Error:", businessError);
 
@@ -1048,7 +1110,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const { error: merchDocError } = await supabase.from('merchant_documents').upsert({
                         merchant_id: user.id,
                         id_card_url: activeProfile.documents?.idCard?.url,
-                        status: 'pending'
+                        status: 'approved'
                     }, { onConflict: 'merchant_id' });
                     if (merchDocError) console.error("Merchant Doc Sync Error:", merchDocError);
                 }
@@ -1109,6 +1171,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // 3. Sync Merchant Data if exists
             if (activeProfile.business) {
                 const { error: businessError } = await supabase.from('businesses').upsert({
+                    id: activeProfile.business.id, // Include ID to prevent duplicates
                     owner_id: user.id,
                     name: activeProfile.business.businessName,
                     category: activeProfile.business.category,
@@ -1162,35 +1225,24 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const payCommission = async () => {
         if (!user || profile.commissionDebt <= 0) return;
-        const amountToPay = profile.commissionDebt;
 
-        try {
-            // 1. Call Supabase Edge Function to Create Wave Session
-            const { data, error } = await supabase.functions.invoke('create-wave-checkout', {
-                body: {
-                    amount: amountToPay,
-                    driverId: user.id
-                }
-            });
-
-            if (error) throw error;
-            if (!data?.checkout_url) throw new Error("No checkout URL returned");
-
-            // 2. Open Wave Checkout
-            window.open(data.checkout_url, '_blank');
-
-            // 3. User feedback
-            console.log("Redirected to Wave Checkout:", data.checkout_url);
-
-        } catch (err: any) {
-            console.error("Error initiating Wave payment:", err);
-
-            // Simplified Grammar (Grade 5)
-            const simplifiedMessage = "Sorry, we couldn't start the payment right now. " +
-                "If Wave is not working, you can pay at our office or use our Wave business number.";
-
-            showAlert("Payment Error", simplifiedMessage);
-        }
+        // Bypassing Wave API for now as requested
+        showAlert(
+            "Payment Options",
+            "Automatic Wave payment is currently unavailable. How would you like to pay?",
+            () => {
+                // Navigate or show manual payment UI
+                window.dispatchEvent(new CustomEvent('open-manual-payment'));
+            },
+            "Manual Wave Pay",
+            "Coming to Office",
+            () => {
+                showAlert(
+                    "Office Payment",
+                    "Please visit our office in Bakau, near the Stadium, Gambia. Call 388 8888 for directions if needed."
+                );
+            }
+        );
     };
 
     const requestAccountDeletion = async () => {
@@ -1220,14 +1272,43 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    const submitManualPayment = async (method: 'WAVE_MANUAL' | 'OFFICE', transactionId?: string) => {
+        if (!user) return { success: false, error: 'User not authenticated' };
+        const amount = profile.commissionDebt;
+
+        try {
+            const { error } = await supabase.from('manual_payments').insert({
+                user_id: user.id,
+                amount,
+                transaction_id: transactionId,
+                payment_method: method,
+                status: 'PENDING'
+            });
+
+            if (error) throw error;
+
+            setPendingManualPayment({
+                amount,
+                method,
+                createdAt: new Date().toISOString()
+            });
+
+            return { success: true };
+        } catch (err: any) {
+            console.error("Manual Payment Error:", err);
+            return { success: false, error: err.message };
+        }
+    };
+
     const signOut = async () => {
         setIncomingRides([]);
+        setIsOnboarded(false); // Force redirect to onboarding/login
         try {
             await supabase.auth.signOut();
+            window.location.reload(); // Hard reload for clean state
         } catch (error) {
             console.warn('Sign out failed, likely due to session already being invalidated (e.g. account deleted):', error);
-            // Even if sign out fails, we want the user to be redirected to login, 
-            // which usually happens automatically when the auth state listener triggers.
+            window.location.reload(); // Still reload even if error
         }
     };
 
@@ -1241,11 +1322,12 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 else if (profile.vehicle && !profile.business) setRole('DRIVER');
             },
             toggleOnlineStatus, payCommission, signOut, uploadFile, loadUserData, syncProfile, updateActiveRole,
-            requestAccountDeletion,
+            requestAccountDeletion, submitManualPayment, pendingManualPayment,
             rideStats, orderStats, incomingRides, setIncomingRides,
             rejectedRideIds, setRejectedRideIds,
             appSettings,
-            isLocked: (profile.commissionDebt > appSettings.max_driver_cash_amount) || profile.isSuspended,
+            isLocked: (profile.commissionDebt >= appSettings.max_driver_cash_amount) || profile.isSuspended,
+            lockReason: profile.isSuspended ? 'SUSPENDED' : (profile.commissionDebt >= appSettings.max_driver_cash_amount ? 'DEBT_LIMIT' : null),
             isLoading
         }}>
             {children}

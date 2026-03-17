@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AppNotification, ChatSession, ChatMessage } from '../types';
 import { AlertModal } from '../components/AlertModal';
+import { useAuth } from './AuthContext';
 
 interface UIContextType {
     isDarkMode: boolean;
@@ -15,7 +16,7 @@ interface UIContextType {
     closeChat: () => void;
     chatMessages: Record<string, ChatMessage[]>;
     sendMessage: (sessionId: string, text: string) => void;
-    showAlert: (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string) => void;
+    showAlert: (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string, onCancel?: () => void) => void;
 }
 
 const UIContext = createContext<UIContextType | undefined>(undefined);
@@ -33,13 +34,24 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
     const [notifications, setNotifications] = useState<AppNotification[]>([]);
     const [activeChat, setActiveChat] = useState<ChatSession | null>(null);
     const [chatMessages, setChatMessages] = useState<Record<string, ChatMessage[]>>({});
-    const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm?: () => void; confirmText?: string; cancelText?: string }>({
+    const [alertModal, setAlertModal] = useState<{ isOpen: boolean; title: string; message: string; onConfirm?: () => void; confirmText?: string; cancelText?: string; onCancel?: () => void }>({
         isOpen: false,
         title: '',
         message: '',
         confirmText: 'OK',
-        cancelText: undefined
+        cancelText: undefined,
+        onCancel: undefined
     });
+
+    const { user } = useAuth();
+
+    useEffect(() => {
+        if (!user) {
+            setNotifications([]);
+            setChatMessages({});
+            setActiveChat(null);
+        }
+    }, [user]);
 
     useEffect(() => {
         // Sync dark mode class with state
@@ -77,8 +89,8 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
         setChatMessages(prev => ({ ...prev, [sessionId]: [...(prev[sessionId] || []), newMessage] }));
     };
 
-    const showAlert = (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string) => {
-        setAlertModal({ isOpen: true, title, message, onConfirm, confirmText, cancelText });
+    const showAlert = (title: string, message: string, onConfirm?: () => void, confirmText?: string, cancelText?: string, onCancel?: () => void) => {
+        setAlertModal({ isOpen: true, title, message, onConfirm, confirmText, cancelText, onCancel });
     };
 
     return (
@@ -95,6 +107,7 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
                 onConfirm={alertModal.onConfirm}
                 confirmText={alertModal.confirmText}
                 cancelText={alertModal.cancelText}
+                onCancel={alertModal.onCancel}
                 onClose={() => setAlertModal(prev => ({ ...prev, isOpen: false }))}
                 isDarkMode={isDarkMode}
             />

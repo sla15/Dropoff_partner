@@ -1,5 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Geolocation } from '@capacitor/geolocation';
 import { useApp } from '../context/AppContext';
 import { Store, Upload, X, MapPin, Navigation, Loader2, Plus, Clock, CheckCircle, Globe, Compass, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '../components/Input';
@@ -78,17 +79,24 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
     }
   }, [merchantLocMode, isDarkMode]);
 
-  const handleUseCurrentLocation = () => {
+  const handleUseCurrentLocation = async () => {
     setIsLocating(true);
     const google = (window as any).google;
-    if (!navigator.geolocation) {
-      showAlert("GPS Error", "Your phone can't find your location. Please check your settings.");
-      setIsLocating(false);
-      return;
-    }
+    
+    try {
+      // Check and request permissions
+      const permissions = await Geolocation.checkPermissions();
+      if (permissions.location !== 'granted') {
+        const request = await Geolocation.requestPermissions();
+        if (request.location !== 'granted') {
+          showAlert("Permission Denied", "Location permission is required to find your store.");
+          setIsLocating(false);
+          return;
+        }
+      }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+      const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+      if (position) {
         const { latitude, longitude } = position.coords;
         new google.maps.Geocoder().geocode({ location: { lat: latitude, lng: longitude } }, (results: any, status: any) => {
           if (status === "OK" && results[0]) {
@@ -99,12 +107,12 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
           setIsLocating(false);
           setMerchantLocMode('NONE');
         });
-      },
-      () => {
-        showAlert("GPS Error", "We couldn't find where you are. Please pick your location on the map.");
-        setIsLocating(false);
       }
-    );
+    } catch (err) {
+      console.error("GPS Error:", err);
+      showAlert("GPS Error", "We couldn't find where you are. Please pick your location on the map.");
+      setIsLocating(false);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'idCard') => {
@@ -156,25 +164,48 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
     }
   };
 
-  const handleNextWithData = () => {
+  const [isCheckingName, setIsCheckingName] = useState(false);
+
+  const handleNextWithData = async () => {
     // Rigid Validation
-    if (!business.name.trim()) return showAlert("Missing Info", "Please enter your Business Name.");
+    const businessName = business.name.trim();
+    if (!businessName) return showAlert("Missing Info", "Please enter your Business Name.");
     if (!business.category) return showAlert("Missing Info", "Please select a Business Category.");
     if (!business.address || !business.locationSet) return showAlert("Missing Info", "Please pin your store location on the map.");
     if (!business.paymentPhone.trim()) return showAlert("Missing Info", "Please enter your Wave/Payment phone number.");
     if (business.subCategories.length === 0) return showAlert("Missing Info", "Please add at least one Product Group or Tag (e.g. Pizza).");
 
+    // Uniqueness Check
+    setIsCheckingName(true);
+    try {
+      const { data: existing, error } = await supabase
+        .from('businesses')
+        .select('id')
+        .ilike('name', businessName)
+        .maybeSingle();
+
+      if (existing) {
+        showAlert("Name Taken", "A business with this name already exists. Please choose a unique name for your shop.");
+        setIsCheckingName(false);
+        return;
+      }
+    } catch (err) {
+      console.error("Error checking business name:", err);
+    } finally {
+      setIsCheckingName(false);
+    }
+
     updateProfile({
       location: business.address,
       business: {
-        businessName: business.name,
+        businessName: businessName,
         category: business.category,
         logo: business.logo,
         address: business.address,
         workingHours: business.workingHours,
         workingDays: business.workingDays,
         subCategories: business.subCategories,
-        phone: business.paymentPhone, // Sync to primary phone field too
+        phone: business.paymentPhone,
         eWallet: business.eWallet,
         website: business.website,
         lat: business.lat,
@@ -187,9 +218,11 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
 
   if (step === 'MERCHANT_FORM') {
     return (
-      <div className="px-8 pb-10 pt-28 h-full flex flex-col bg-white dark:bg-black animate-in slide-in-from-right duration-500">
-        <h2 className="text-[34px] font-black dark:text-white mb-1.5 tracking-tight leading-tight">Business Details</h2>
-        <p className="text-slate-500 text-lg mb-8 font-medium">Complete your store setup.</p>
+      <div className="px-8 pb-10 h-full flex flex-col bg-white dark:bg-black animate-in slide-in-from-right duration-500 overflow-hidden">
+        <div className="shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' }}>
+          <h2 className="text-[34px] font-black dark:text-white mb-1.5 tracking-tight leading-tight">Business Details</h2>
+          <p className="text-slate-500 text-lg mb-8 font-medium">Complete your store setup.</p>
+        </div>
 
         <div className="space-y-6 flex-1 overflow-y-auto no-scrollbar">
           {/* Logo Upload */}
@@ -294,9 +327,10 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
 
         <button
           onClick={handleNextWithData}
-          disabled={isUploading !== null}
-          className="w-full font-bold py-5 rounded-[22px] mt-6 bg-slate-900 dark:bg-white text-white dark:text-black shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={isUploading !== null || isCheckingName}
+          className="w-full font-bold py-5 rounded-[22px] mt-6 bg-slate-900 dark:bg-white text-white dark:text-black shadow-xl shrink-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
+          {isCheckingName && <Loader2 className="animate-spin" size={20} />}
           Complete Setup
         </button>
 
@@ -371,9 +405,11 @@ export const OnboardingMerchantFlow: React.FC<OnboardingMerchantFlowProps> = ({ 
   }
 
   return (
-    <div className="px-8 pb-10 pt-28 h-full flex flex-col bg-white dark:bg-black animate-in slide-in-from-right duration-500">
-      <h2 className="text-[34px] font-black dark:text-white mb-1.5 tracking-tight leading-tight">Verification</h2>
-      <p className="text-slate-500 text-lg mb-8 font-medium">Upload your National ID Card.</p>
+    <div className="px-8 pb-10 h-full flex flex-col bg-white dark:bg-black animate-in slide-in-from-right duration-500">
+      <div className="shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)' }}>
+        <h2 className="text-[34px] font-black dark:text-white mb-1.5 tracking-tight leading-tight">Verification</h2>
+        <p className="text-slate-500 text-lg mb-8 font-medium">Upload your National ID Card.</p>
+      </div>
 
       <div
         onClick={() => document.getElementById('merch-id-onb')?.click()}

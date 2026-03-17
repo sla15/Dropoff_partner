@@ -54,8 +54,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                     {cancelText && (
                         <button
                             onClick={() => {
-                                if (onCancel) onCancel();
                                 onClose();
+                                if (onCancel) onCancel();
                             }}
                             className={`
                                 flex-1 py-4 text-[17px] font-bold transition-colors active:bg-black/5
@@ -67,8 +67,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
                     )}
                     <button
                         onClick={() => {
-                            if (onConfirm) onConfirm();
                             onClose();
+                            if (onConfirm) onConfirm();
                         }}
                         className={`
                             flex-1 py-4 text-[17px] font-black transition-colors active:bg-black/5
