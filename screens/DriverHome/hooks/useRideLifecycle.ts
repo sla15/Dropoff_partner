@@ -274,10 +274,16 @@ export const useRideLifecycle = (
 
     // Effects
     useEffect(() => {
-        // If we have incoming rides and no active ride, take the first one (oldest)
-        if (incomingRides.length > 0 && !currentRide) {
+        // If we have incoming rides and no active ride (or we are on the summary/completed screen), take the first one
+        if (incomingRides.length > 0 && (!currentRide || rideStatus === 'COMPLETED')) {
             const oldestRide = incomingRides[0];
             if (!rejectedRideIds.has(oldestRide.id)) {
+                // If it's a new request and we were on a summary, clear state first
+                if (rideStatus === 'COMPLETED') {
+                    setHasCollectedPayment(false);
+                    setUserRating(0);
+                    setShowRatingModal(false);
+                }
                 setCurrentRide(oldestRide);
 
                 // RESTORE STATUS FROM DATABASE IF AVAILABLE

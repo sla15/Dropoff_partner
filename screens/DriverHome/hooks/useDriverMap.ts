@@ -161,6 +161,16 @@ export const useDriverMap = (
         const isLowEnd = (navigator.hardwareConcurrency || 4) <= 2;
         const duration = isLowEnd ? 1500 : 1000;
 
+        // Skip animation if the move is too tiny (noise threshold: ~1 meter)
+        const totalDist = Math.sqrt(Math.pow(targetPos.lat - currentPosRef.lat, 2) + Math.pow(targetPos.lng - currentPosRef.lng, 2));
+        if (totalDist < 0.00001) {
+            if (driverMarker.current) {
+                if (typeof driverMarker.current.setPosition === 'function') driverMarker.current.setPosition(targetPos);
+                else driverMarker.current.position = targetPos;
+            }
+            return;
+        }
+
         const animateMarker = (timestamp: number) => {
             if (!startTime) startTime = timestamp;
             const progress = Math.min((timestamp - startTime) / duration, 1);

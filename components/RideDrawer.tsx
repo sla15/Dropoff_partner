@@ -24,6 +24,7 @@ interface RideDrawerProps {
     currentLat?: number;
     currentLng?: number;
     isProcessing?: boolean;
+    onClose?: () => void;
 }
 
 export const RideDrawer: React.FC<RideDrawerProps> = ({
@@ -45,7 +46,8 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
     queueCount = 1,
     currentLat,
     currentLng,
-    isProcessing = false
+    isProcessing = false,
+    onClose
 }) => {
     const [showCashConfirm, setShowCashConfirm] = React.useState(false);
 
@@ -527,12 +529,20 @@ export const RideDrawer: React.FC<RideDrawerProps> = ({
                             )}
 
                             {rideStatus === 'COMPLETED' && (
-                                <button
-                                    onClick={onCollectPayment}
-                                    className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-black active:scale-95 transition-transform mt-1 shadow-lg hover:bg-[#00C285] flex items-center justify-center gap-2"
-                                >
-                                    <Wallet size={20} /> Collect Payment
-                                </button>
+                                <div className="space-y-3">
+                                    <button
+                                        onClick={onCollectPayment}
+                                        className="w-full bg-[#00E39A] text-black h-14 rounded-2xl font-black active:scale-95 transition-transform mt-1 shadow-lg hover:bg-[#00C285] flex items-center justify-center gap-2"
+                                    >
+                                        <Wallet size={20} /> Collect Payment
+                                    </button>
+                                    <button
+                                        onClick={onClose}
+                                        className="w-full bg-white dark:bg-zinc-800 text-gray-900 dark:text-white h-14 rounded-2xl font-black active:scale-95 transition-transform flex items-center justify-center gap-2 border border-gray-100 dark:border-white/5"
+                                    >
+                                        <CheckCircle size={20} className="text-[#00E39A]" /> Okay
+                                    </button>
+                                </div>
                             )}
 
                             {/* 2. Secondary Support Actions (SMS Integration) */}

@@ -246,7 +246,7 @@ export const DriverHome: React.FC = () => {
 
                         if (!isMerchant && originalStatus === 'NAVIGATING' && currentRide.pickup_lat && currentRide.pickup_lng && profile.currentLat && profile.currentLng) {
                             const actualDist = calculateDistance(currentRide.pickup_lat, currentRide.pickup_lng, profile.currentLat, profile.currentLng);
-                            if (actualDist >= 0.05) {
+                            if (actualDist >= 0.1) {
                                 try {
                                     const { data, error } = await supabase.rpc('complete_ride', {
                                         p_ride_id: currentRide.id,
@@ -310,6 +310,7 @@ export const DriverHome: React.FC = () => {
                     onComplete={handleCompleteRide}
                     onChat={() => openChat({ id: `chat-${currentRide.id}`, participantName: currentRide.passengerName, contextId: currentRide.id })}
                     onCollectPayment={handleCollectPayment}
+                    onClose={handleSkipRating}
                     countdown={countdown}
                     rideType={currentRide.type as any}
                     queueCount={incomingRides.length}

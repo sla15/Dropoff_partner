@@ -67,12 +67,14 @@ const AppContent: React.FC = () => {
 }
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { VersionCheckModal } from './components/VersionCheckModal';
 
 const App: React.FC = () => {
   return (
     <ErrorBoundary>
       <AppProvider>
         <AppContent />
+        <VersionCheckModal />
       </AppProvider>
     </ErrorBoundary>
   );

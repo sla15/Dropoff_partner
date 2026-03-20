@@ -41,6 +41,10 @@ interface ProfileContextType {
         multiplier_premium: number;
         currency_symbol: string;
         price_per_stop: number;
+        min_partner_app_version: string;
+        latest_partner_app_version: string;
+        update_url_partner_android: string;
+        update_url_partner_ios: string;
     };
     rejectedRideIds: Set<string>;
     setRejectedRideIds: React.Dispatch<React.SetStateAction<Set<string>>>;
@@ -78,7 +82,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         multiplier_scooter: 0.7,
         multiplier_economy: 1,
         multiplier_premium: 1.5,
-        currency_symbol: 'D'
+        currency_symbol: 'D',
+        min_partner_app_version: '1.0.0',
+        latest_partner_app_version: '1.0.0',
+        update_url_partner_android: 'https://play.google.com/store/apps/details?id=com.dropoffgambia.partner',
+        update_url_partner_ios: ''
     });
 
     const { currentRide, setCurrentRide } = useDomain() || {};
@@ -178,7 +186,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     multiplier_economy: Number(config.multiplier_economy || 1),
                     multiplier_premium: Number(config.multiplier_premium || 1.5),
                     currency_symbol: config.currency_symbol || 'D',
-                    price_per_stop: Number(config.price_per_stop || 10)
+                    price_per_stop: Number(config.price_per_stop || 10),
+                    min_partner_app_version: config.min_partner_app_version || '1.0.0',
+                    latest_partner_app_version: config.latest_partner_app_version || '1.0.0',
+                    update_url_partner_android: config.update_url_partner_android || 'https://play.google.com/store/apps/details?id=com.dropoffgambia.partner',
+                    update_url_partner_ios: config.update_url_partner_ios || ''
                 });
             }
 

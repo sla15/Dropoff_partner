@@ -395,7 +395,7 @@ export const OnboardingScreen: React.FC = () => {
   return (
     <div className="h-full bg-white dark:bg-black relative overflow-hidden">
       {currentStep !== 'WELCOME' && (
-        <div className="absolute top-10 left-0 right-0 z-20">
+        <div className="absolute top-0 left-0 right-0 z-20">
           <div className="w-full h-1.5 bg-slate-100 dark:bg-zinc-900 overflow-hidden">
             <div className="h-full bg-[#00E39A] transition-all duration-500" style={{ width: `${progressWidth}%` }}></div>
           </div>

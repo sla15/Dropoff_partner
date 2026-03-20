@@ -225,10 +225,10 @@ export const syncFCMTokenToSupabase = async (userId: string, token: string) => {
             return;
         }
 
-        const { error } = await supabase
-            .from('profiles')
-            .update({ fcm_token: token, updated_at: new Date().toISOString() })
-            .eq('id', userId);
+        const { error } = await supabase.rpc('add_fcm_token', {
+            p_user_id: userId,
+            p_token: token
+        });
 
         if (error) {
             console.error('❌ FCM: Sync failed:', error);
